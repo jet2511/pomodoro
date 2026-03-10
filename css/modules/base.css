@@ -1,0 +1,128 @@
+:root {
+    /* Color Palette - Dark Theme */
+    --clr-bg-pomodoro: #ba4949;
+    --clr-bg-short: #38858a;
+    --clr-bg-long: #397097;
+    
+    --clr-text: #ffffff;
+    --clr-text-muted: rgba(255, 255, 255, 0.7);
+    
+    --glass-bg: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Theme Light Mode Overrides */
+:root[data-theme="light"] {
+    --clr-bg-pomodoro: #fdf2f2;
+    --clr-bg-short: #f2f7f7;
+    --clr-bg-long: #f2f5f7;
+    --clr-text: #333333;
+    --clr-text-muted: rgba(0, 0, 0, 0.6);
+    --glass-bg: rgba(255, 255, 255, 0.5);
+    --glass-border: rgba(0, 0, 0, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    color: var(--clr-text);
+    background-color: var(--clr-bg-pomodoro);
+    transition: background-color 0.5s ease;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 2rem 1rem;
+}
+
+/* Dynamic Body Classes */
+body.mode-pomodoro { background-color: var(--clr-bg-pomodoro); }
+body.mode-shortBreak { background-color: var(--clr-bg-short); }
+body.mode-longBreak { background-color: var(--clr-bg-long); }
+
+.app-container {
+    width: 100%;
+    max-width: 480px;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.header-btn {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--clr-text);
+    height: 40px;
+    padding: 0 0.8rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: inherit;
+    font-weight: 500;
+}
+
+#settings-btn {
+    width: 40px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.header-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+#settings-btn:hover {
+    transform: rotate(45deg);
+}
+:root[data-theme="light"] .header-btn { color: #333; }
+
+/* Glassmorphism Classes */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Inputs / Buttons reset */
+.action-btn, .icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+:root[data-theme="light"] .icon-btn { color: #333; }

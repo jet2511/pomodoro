@@ -1,0 +1,215 @@
+/* --- Settings Modal --- */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    background: var(--clr-bg-pomodoro); /* Fallback, overridden by mode */
+    width: 90%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 0;
+    transform: translateY(0);
+    transition: transform 0.3s ease;
+}
+body.mode-shortBreak .modal-content { background: var(--clr-bg-short); }
+body.mode-longBreak .modal-content { background: var(--clr-bg-long); }
+
+.modal.hidden .modal-content {
+    transform: translateY(-20px);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.setting-section {
+    margin-bottom: 2rem;
+}
+
+.setting-section h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--clr-text-muted);
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.setting-row label {
+    font-weight: 500;
+}
+
+.timer-inputs {
+    display: flex;
+    gap: 1rem;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.input-group label {
+    font-size: 0.8rem;
+    color: var(--clr-text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.modal input[type="number"], .styled-select {
+    background: rgba(0,0,0,0.1);
+    border: 1px solid var(--glass-border);
+    color: var(--clr-text);
+    padding: 0.5rem;
+    border-radius: 8px;
+    font-family: inherit;
+    width: 100%;
+}
+.inline-input {
+    width: 60px !important;
+    text-align: center;
+}
+
+option {
+    background: #333;
+    color: white;
+}
+:root[data-theme="light"] option {
+    background: #fff;
+    color: #333;
+}
+
+/* Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.2);
+    transition: .4s;
+    border: 1px solid var(--glass-border);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 4px;
+    bottom: 3px;
+    background-color: var(--clr-text);
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: rgba(255,255,255,0.3);
+}
+
+input:checked + .slider:before {
+    transform: translateX(24px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+:root[data-theme="light"] .slider:before { background-color: #333; }
+:root[data-theme="light"] input:checked + .slider { background-color: rgba(0,0,0,0.1); }
+
+/* Volume Slider */
+.volume-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+.styled-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 5px;
+    background: rgba(0,0,0,0.2);
+    outline: none;
+}
+.styled-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--clr-text);
+    cursor: pointer;
+}
+
+:root[data-theme="light"] .styled-slider::-webkit-slider-thumb { background: #333; }
+
+.modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.modal-primary-btn {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
+}
