@@ -89,6 +89,14 @@ elements.inputs.volume.addEventListener('input', (e) => {
     elements.volumeDisplay.textContent = e.target.value;
 });
 
+// --- Compact Mode ---
+function toggleCompactMode(force) {
+    const isCompact = force !== undefined ? force : !document.body.classList.contains('compact-mode');
+    document.body.classList.toggle('compact-mode', isCompact);
+}
+
+elements.compactBtn.addEventListener('click', () => toggleCompactMode());
+
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', (e) => {
     // Check if user is typing in an input or textarea
@@ -111,6 +119,9 @@ document.addEventListener('keydown', (e) => {
         if (e.key.toLowerCase() === 't') {
             e.preventDefault();
             elements.taskInput.focus();
+        }
+        if (e.key.toLowerCase() === 'c') {
+            toggleCompactMode();
         }
     }
 });

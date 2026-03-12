@@ -68,5 +68,8 @@ export const elements = {
 
     // Stats
     statTotalPomodoros: document.getElementById('stat-total-pomodoros'),
-    statTodayTime: document.getElementById('stat-today-time')
+    statTodayTime: document.getElementById('stat-today-time'),
+
+    // Compact Mode
+    compactBtn: document.getElementById('compact-btn')
 };

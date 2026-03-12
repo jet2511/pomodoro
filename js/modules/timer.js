@@ -17,6 +17,25 @@ function setProgress(percent) {
     elements.progressCircle.style.strokeDashoffset = offset;
 }
 
+// --- Favicon Helper ---
+function updateFavicon(mode) {
+    const color = mode === 'pomodoro' ? '#ba4949' : (mode === 'shortBreak' ? '#38858a' : '#397097');
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="${color}" />
+            <path d="M50 20V50L70 70" stroke="white" stroke-width="8" stroke-linecap="round" fill="none" />
+        </svg>
+    `.trim();
+
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+    }
+    link.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 export function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -63,6 +82,7 @@ export function setMode(mode) {
 
     updateDisplay();
     updateStatusText();
+    updateFavicon(mode);
 }
 
 function updateStatusText() {
