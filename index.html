@@ -85,14 +85,17 @@
                 </div>
 
                 <form id="add-task-form" class="task-form glass-panel">
-                    <input type="text" id="task-input" placeholder="What are you working on?" required
-                        autocomplete="off">
-                    <div class="est-pomodoros">
-                        <label for="est-pomodoros-input">Est Pomodoros:</label>
-                        <input type="number" id="est-pomodoros-input" min="1" max="10" value="1" required>
+                    <div class="task-input-wrapper">
+                        <input type="text" id="task-input" placeholder="What are you working on?" required
+                            autocomplete="off">
+                        <div class="est-pomodoros-inline">
+                            <i class="fa-solid fa-hourglass-half"></i>
+                            <input type="number" id="est-pomodoros-input" min="1" max="10" value="1" required
+                                title="Estimated Pomodoros">
+                        </div>
                     </div>
-                    <button type="submit" class="add-btn" aria-label="Add Task"><i
-                            class="fa-solid fa-plus"></i></button>
+                    <button type="submit" class="add-btn" aria-label="Add Task"><i class="fa-solid fa-plus"></i> Add
+                        Task</button>
                 </form>
 
                 <div class="task-list" id="task-list">
@@ -217,6 +220,7 @@
 
             <div class="modal-body auth-body">
                 <div id="auth-logged-out-view">
+                    <div class="dev-badge"><i class="fa-solid fa-hammer"></i> Tính năng đang phát triển</div>
                     <p class="auth-description">Sign in to sync your tasks and settings across devices.</p>
 
                     <button id="google-login-btn" class="auth-provider-btn google-btn">

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('FocusTimer Advanced Features', () => {
     test.beforeEach(async ({ page }) => {
         // Expecting the server to be running on 8080
-        await page.goto('http://localhost:8080');
+        await page.goto('http://localhost:3000');
     });
 
     test('should display total pomodoros in stats', async ({ page }) => {
@@ -78,5 +78,60 @@ test.describe('FocusTimer Advanced Features', () => {
 
         expect(breakFavicon).not.toBe(initialFavicon);
         expect(decodeURIComponent(breakFavicon)).toContain('#38858a'); // Short break teal color
+    });
+
+    test('should attempt to open picture-in-picture', async ({ page }) => {
+        // Mock the Document PiP API before the page loads
+        await page.addInitScript(() => {
+            window.__pipCalled = false;
+            const mockPiP = {
+                requestWindow: async () => {
+                    console.log('--- MOCKED requestWindow CALLED ---');
+                    window.__pipCalled = true;
+                    return {
+                        document: {
+                            body: {
+                                append: () => { },
+                                classList: { add: () => { } }
+                            },
+                            head: { appendChild: () => { } }
+                        },
+                        addEventListener: () => { },
+                        close: () => { },
+                        location: { href: '' }
+                    };
+                }
+            };
+
+            Object.defineProperty(window, 'documentPictureInPicture', {
+                value: mockPiP,
+                configurable: true,
+                writable: true
+            });
+
+            console.log('PiP API Mocked successfully');
+        });
+
+        // Toggle capture of console logs
+        const logs = [];
+        page.on('console', msg => logs.push(msg.text()));
+
+        // Reload to apply init script
+        await page.reload();
+
+        // Ensure the PiP button is visible
+        const pipBtn = page.locator('#pip-btn');
+        await expect(pipBtn).toBeVisible();
+
+        // Click the button
+        await pipBtn.click();
+
+        // Wait for the mock to be called
+        await page.waitForFunction(() => window.__pipCalled === true, { timeout: 5000 });
+
+        // Verify the mock was called
+        const pipCalled = await page.evaluate(() => window.__pipCalled);
+        console.log('Test Logs:', logs);
+        expect(pipCalled).toBe(true);
     });
 });
