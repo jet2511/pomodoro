@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { elements } from './elements.js';
 
 export const taskEvents = {
-    onTaskActivated: () => {}
+    onTaskActivated: () => { }
 };
 
 export function loadTasks() {
@@ -10,7 +10,7 @@ export function loadTasks() {
     if (saved) {
         try {
             state.tasks = JSON.parse(saved);
-        } catch(e) {
+        } catch (e) {
             state.tasks = [];
         }
         const active = state.tasks.find(t => t.isActive);
@@ -60,7 +60,7 @@ export function setActiveTask(id) {
         state.activeTaskId = id;
         saveTasks();
         renderTasks();
-        
+
         taskEvents.onTaskActivated();
     }
 }
@@ -76,7 +76,7 @@ export function deleteTask(id) {
 
 export function updateTaskPomodoros() {
     if (!state.activeTaskId) return;
-    
+
     const task = state.tasks.find(t => t.id === state.activeTaskId);
     if (task) {
         task.actualPomodoros++;
@@ -94,13 +94,12 @@ export function renderTasks() {
     state.tasks.forEach(task => {
         const item = document.createElement('div');
         item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
-        
-        // Use data attributes and event delegation instead of inline onclick handlers
+
         item.innerHTML = `
             <div class="task-check" data-action="toggle" data-id="${task.id}" title="Toggle completion">
                 <i class="fa-solid fa-check"></i>
             </div>
-            <div class="task-content" data-action="activate" data-id="${task.id}">
+            <div class="task-content" data-action="activate" data-id="${task.id}" draggable="true">
                 <div class="task-text">${task.title}</div>
                 <div class="task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
             </div>
@@ -110,6 +109,51 @@ export function renderTasks() {
                 </button>
             </div>
         `;
+
+        // DRAG & DROP LOGIC
+        const content = item.querySelector('.task-content');
+
+        content.addEventListener('dragstart', (e) => {
+            item.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', task.id);
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        content.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            item.classList.add('drag-over');
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData('text/plain');
+            if (draggedId !== task.id) {
+                reorderTasks(draggedId, task.id);
+            }
+        });
+
         elements.taskList.appendChild(item);
     });
+}
+
+function reorderTasks(draggedId, targetId) {
+    const draggedIndex = state.tasks.findIndex(t => t.id === draggedId);
+    const targetIndex = state.tasks.findIndex(t => t.id === targetId);
+
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+        const [draggedTask] = state.tasks.splice(draggedIndex, 1);
+        state.tasks.splice(targetIndex, 0, draggedTask);
+        saveTasks();
+        renderTasks();
+    }
 }

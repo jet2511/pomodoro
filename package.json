@@ -1,0 +1,14 @@
+{
+    "name": "pomodoro-pwa",
+    "version": "1.0.0",
+    "description": "Modern Pomodoro Timer with PWA and Advanced Features",
+    "main": "js/app.js",
+    "scripts": {
+        "start": "npx serve .",
+        "test": "npx playwright test"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.40.0"
+    },
+    "type": "module"
+}

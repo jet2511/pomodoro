@@ -7,7 +7,7 @@ export const elements = {
     statusText: document.getElementById('status-text'),
     modeBtns: document.querySelectorAll('.mode-btn'),
     progressCircle: document.querySelector('.progress-ring__circle'),
-    
+
     // Audio
     sounds: {
         bell: document.getElementById('bell-sound'),
@@ -16,19 +16,19 @@ export const elements = {
         tick: document.getElementById('tick-sound'),
         rain: document.getElementById('rain-sound')
     },
-    
+
     // Forms
     form: document.getElementById('add-task-form'),
     taskInput: document.getElementById('task-input'),
     estPomodorosInput: document.getElementById('est-pomodoros-input'),
     taskList: document.getElementById('task-list'),
-    
+
     // Settings
     settingsBtn: document.getElementById('settings-btn'),
     settingsModal: document.getElementById('settings-modal'),
     closeSettingsBtn: document.getElementById('close-settings-btn'),
     saveSettingsBtn: document.getElementById('save-settings-btn'),
-    
+
     // Setting Inputs
     inputs: {
         pomodoro: document.getElementById('setting-pomodoro'),
@@ -43,7 +43,7 @@ export const elements = {
         darkMode: document.getElementById('setting-darkMode')
     },
     volumeDisplay: document.getElementById('volume-display'),
-    
+
     // Auth
     authBtn: document.getElementById('auth-btn'),
     authUsername: document.getElementById('auth-username'),
@@ -51,7 +51,7 @@ export const elements = {
     closeAuthBtn: document.getElementById('close-auth-btn'),
     authLoggedOutView: document.getElementById('auth-logged-out-view'),
     authLoggedInView: document.getElementById('auth-logged-in-view'),
-    
+
     // Auth Forms/Buttons
     googleLoginBtn: document.getElementById('google-login-btn'),
     emailAuthForm: document.getElementById('email-auth-form'),
@@ -61,8 +61,12 @@ export const elements = {
     emailRegisterBtn: document.getElementById('email-register-btn'),
     authErrorMsg: document.getElementById('auth-error-msg'),
     logoutBtn: document.getElementById('logout-btn'),
-    
+
     // User Display
     userDisplayName: document.getElementById('user-display-name'),
-    userEmail: document.getElementById('user-email')
+    userEmail: document.getElementById('user-email'),
+
+    // Stats
+    statTotalPomodoros: document.getElementById('stat-total-pomodoros'),
+    statTodayTime: document.getElementById('stat-today-time')
 };
