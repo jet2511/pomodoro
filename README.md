@@ -26,6 +26,7 @@ A beautiful, functional, and deeply customizable Pomodoro Timer built with Vanil
     *   Adjust main volume globally.
 *   **🎨 Stunning Design**
     *   Sleek **Glassmorphism** overlays.
+    *   **Picture-in-Picture (PiP):** Keep the timer always on top in a floating window (Chrome 116+).
     *   Dynamic background colors that adapt based on the mode (Red for Focus, Teal for Short break, Blue for Long Break).
     *   Switch between classic **Dark Mode** and an elegant **Light Mode**.
 *   **☁️ Data Options & Cloud Sync**
@@ -86,7 +87,7 @@ const firebaseConfig = {
 
 ## 🧪 Automated Testing (Node.js)
 
-You can run end-to-end tests to verify Keyboard Shortcuts, Analytics, and Drag & Drop functionality using Playwright.
+You can run end-to-end tests to verify Keyboard Shortcuts (`Space`, `S`, `T`, `C`, `P`), Analytics, and Drag & Drop functionality using Playwright.
 
 1.  **Install dependencies:**
     ```bash

@@ -7,6 +7,7 @@ import { updateVolume } from './modules/audio.js';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
+import { initPiP, togglePiP } from './modules/pip.js';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
@@ -97,6 +98,9 @@ function toggleCompactMode(force) {
 
 elements.compactBtn.addEventListener('click', () => toggleCompactMode());
 
+// ... PiP Listener ...
+elements.pipBtn.addEventListener('click', togglePiP);
+
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', (e) => {
     // Check if user is typing in an input or textarea
@@ -123,6 +127,9 @@ document.addEventListener('keydown', (e) => {
         if (e.key.toLowerCase() === 'c') {
             toggleCompactMode();
         }
+        if (e.key.toLowerCase() === 'p') {
+            togglePiP();
+        }
     }
 });
 elements.settingsModal.addEventListener('click', (e) => {
@@ -141,6 +148,7 @@ function init() {
     loadTasks();
     updateStatsUI();
     setMode('pomodoro');
+    initPiP();
 
     // Initialize Firebase Auth
     initAuth();

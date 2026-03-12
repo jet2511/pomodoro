@@ -53,4 +53,30 @@ test.describe('FocusTimer Advanced Features', () => {
         await expect(tasks.nth(0)).toContainText('Task 2');
         await expect(tasks.nth(1)).toContainText('Task 1');
     });
+
+    test('should toggle compact mode', async ({ page }) => {
+        // Check initial state
+        await expect(page.locator('body')).not.toHaveClass(/compact-mode/);
+
+        // Toggle via button
+        await page.click('#compact-btn');
+        await expect(page.locator('body')).toHaveClass(/compact-mode/);
+
+        // Toggle via keyboard 'C'
+        await page.keyboard.press('c');
+        await expect(page.locator('body')).not.toHaveClass(/compact-mode/);
+    });
+
+    test('should update favicon color on mode switch', async ({ page }) => {
+        // Initial favicon (data URI)
+        const initialFavicon = await page.locator("link[rel~='icon']").getAttribute('href');
+        expect(initialFavicon).toContain('data:image/svg+xml');
+
+        // Switch to Short Break
+        await page.click('button[data-mode="shortBreak"]');
+        const breakFavicon = await page.locator("link[rel~='icon']").getAttribute('href');
+
+        expect(breakFavicon).not.toBe(initialFavicon);
+        expect(decodeURIComponent(breakFavicon)).toContain('#38858a'); // Short break teal color
+    });
 });
