@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,19 +12,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css">
-    
-    <!-- Firebase SDKs (Compat version for simpler vanilla JS integration) -->
+
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ba4949">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
+
 <body class="mode-pomodoro">
     <div class="app-container" id="app">
         <header>
             <h1><i class="fa-solid fa-clock"></i> FocusTimer</h1>
             <div class="header-actions">
-                <button id="auth-btn" class="header-btn" title="Login / Sync"><i class="fa-solid fa-user"></i> <span id="auth-username" style="display:none; font-size:0.8rem; margin-left: 5px;"></span></button>
-                <button id="settings-btn" class="header-btn" aria-label="Settings"><i class="fa-solid fa-gear"></i></button>
+                <button id="auth-btn" class="header-btn" title="Login / Sync"><i class="fa-solid fa-user"></i> <span
+                        id="auth-username" style="display:none; font-size:0.8rem; margin-left: 5px;"></span></button>
+                <button id="settings-btn" class="header-btn" aria-label="Settings"><i
+                        class="fa-solid fa-gear"></i></button>
             </div>
         </header>
 
@@ -37,31 +46,49 @@
 
                 <div class="timer-display">
                     <svg class="progress-ring" width="250" height="250">
-                        <circle class="progress-ring__circle-bg" stroke="rgba(255, 255, 255, 0.1)" stroke-width="8" fill="transparent" r="115" cx="125" cy="125"/>
-                        <circle class="progress-ring__circle" stroke="white" stroke-width="8" fill="transparent" r="115" cx="125" cy="125"/>
+                        <circle class="progress-ring__circle-bg" stroke="rgba(255, 255, 255, 0.1)" stroke-width="8"
+                            fill="transparent" r="115" cx="125" cy="125" />
+                        <circle class="progress-ring__circle" stroke="white" stroke-width="8" fill="transparent" r="115"
+                            cx="125" cy="125" />
                     </svg>
                     <div class="time" id="time-display">25:00</div>
                 </div>
 
                 <div class="controls">
                     <button id="main-btn" class="control-btn primary">Start</button>
-                    <button id="skip-btn" class="control-btn secondary" title="Skip to next phase"><i class="fa-solid fa-forward-step"></i></button>
+                    <button id="skip-btn" class="control-btn secondary" title="Skip to next phase"><i
+                            class="fa-solid fa-forward-step"></i></button>
                 </div>
                 <div class="status-text" id="status-text">Ready to focus?</div>
+            </section>
+
+            <section class="stats-section glass-panel">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-total-pomodoros">0</span>
+                        <span class="stat-label">Pomodoros</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-today-time">0h 0m</span>
+                        <span class="stat-label">Focused Today</span>
+                    </div>
+                </div>
             </section>
 
             <section class="tasks-section">
                 <div class="tasks-header">
                     <h2>Tasks</h2>
                 </div>
-                
+
                 <form id="add-task-form" class="task-form glass-panel">
-                    <input type="text" id="task-input" placeholder="What are you working on?" required autocomplete="off">
+                    <input type="text" id="task-input" placeholder="What are you working on?" required
+                        autocomplete="off">
                     <div class="est-pomodoros">
                         <label for="est-pomodoros-input">Est Pomodoros:</label>
                         <input type="number" id="est-pomodoros-input" min="1" max="10" value="1" required>
                     </div>
-                    <button type="submit" class="add-btn" aria-label="Add Task"><i class="fa-solid fa-plus"></i></button>
+                    <button type="submit" class="add-btn" aria-label="Add Task"><i
+                            class="fa-solid fa-plus"></i></button>
                 </form>
 
                 <div class="task-list" id="task-list">
@@ -83,9 +110,10 @@
         <div class="modal-content glass-panel">
             <div class="modal-header">
                 <h2>Settings</h2>
-                <button id="close-settings-btn" class="icon-btn" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button>
+                <button id="close-settings-btn" class="icon-btn" aria-label="Close settings"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
-            
+
             <div class="modal-body">
                 <!-- Timer Settings -->
                 <div class="setting-section">
@@ -106,7 +134,8 @@
                     </div>
                     <div class="setting-row">
                         <label for="setting-longBreakInterval">Long Break interval</label>
-                        <input type="number" id="setting-longBreakInterval" min="1" max="10" value="4" class="inline-input">
+                        <input type="number" id="setting-longBreakInterval" min="1" max="10" value="4"
+                            class="inline-input">
                     </div>
                 </div>
 
@@ -166,7 +195,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="modal-footer">
                 <button id="save-settings-btn" class="control-btn primary modal-primary-btn">OK</button>
             </div>
@@ -178,22 +207,24 @@
         <div class="modal-content glass-panel" style="max-width: 350px;">
             <div class="modal-header">
                 <h2>Account & Sync</h2>
-                <button id="close-auth-btn" class="icon-btn" aria-label="Close auth"><i class="fa-solid fa-xmark"></i></button>
+                <button id="close-auth-btn" class="icon-btn" aria-label="Close auth"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
-            
+
             <div class="modal-body auth-body">
                 <div id="auth-logged-out-view">
                     <p class="auth-description">Sign in to sync your tasks and settings across devices.</p>
-                    
+
                     <button id="google-login-btn" class="auth-provider-btn google-btn">
                         <i class="fa-brands fa-google"></i> Continue with Google
                     </button>
-                    
+
                     <div class="auth-divider"><span>or</span></div>
-                    
+
                     <form id="email-auth-form" class="auth-form">
                         <input type="email" id="auth-email" placeholder="Email" required autocomplete="email">
-                        <input type="password" id="auth-password" placeholder="Password" required autocomplete="current-password">
+                        <input type="password" id="auth-password" placeholder="Password" required
+                            autocomplete="current-password">
                         <div class="auth-actions">
                             <button type="submit" id="email-login-btn" class="auth-submit-btn">Login</button>
                             <button type="button" id="email-register-btn" class="auth-secondary-btn">Register</button>
@@ -201,7 +232,7 @@
                         <div id="auth-error-msg" class="auth-error" style="display:none;"></div>
                     </form>
                 </div>
-                
+
                 <div id="auth-logged-in-view" style="display:none;">
                     <div class="user-profile">
                         <div class="avatar-placeholder"><i class="fa-solid fa-user"></i></div>
@@ -210,13 +241,15 @@
                             <p id="user-email" class="text-muted">user@example.com</p>
                         </div>
                     </div>
-                    
+
                     <div class="sync-status">
-                        <p><i class="fa-solid fa-cloud-arrow-up"></i> Cloud Sync: <span id="sync-indicator" class="sync-active">Active</span></p>
+                        <p><i class="fa-solid fa-cloud-arrow-up"></i> Cloud Sync: <span id="sync-indicator"
+                                class="sync-active">Active</span></p>
                         <p class="sync-note">Your tasks are saved to the cloud automatically.</p>
                     </div>
-                    
-                    <button id="logout-btn" class="auth-secondary-btn danger-btn" style="width: 100%; margin-top: 1rem;">Log Out</button>
+
+                    <button id="logout-btn" class="auth-secondary-btn danger-btn"
+                        style="width: 100%; margin-top: 1rem;">Log Out</button>
                 </div>
             </div>
         </div>
@@ -224,5 +257,17 @@
 
     <!-- Firebase Configuration & Modules -->
     <script src="js/app.js" type="module"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.log('Service Worker failed', err));
+            });
+        }
+    </script>
 </body>
+
 </html>

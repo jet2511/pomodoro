@@ -84,6 +84,23 @@ const firebaseConfig = {
 };
 ```
 
+## 🧪 Automated Testing (Node.js)
+
+You can run end-to-end tests to verify Keyboard Shortcuts, Analytics, and Drag & Drop functionality using Playwright.
+
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Install Playwright browsers:**
+    ```bash
+    npx playwright install
+    ```
+3.  **Run tests (ensure your local server is running on port 8080):**
+    ```bash
+    npm test
+    ```
+
 ## 🤝 Contributing
 
 Feel free to fork this project, make visual tweaks, add new alarm sounds, or modify the Firebase sync logic to fit your specific workflow!

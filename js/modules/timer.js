@@ -3,7 +3,7 @@ import { elements } from './elements.js';
 import { toggleBackgroundSound, playAlarm } from './audio.js';
 
 export const timerEvents = {
-    onPomodoroComplete: () => {}
+    onPomodoroComplete: () => { }
 };
 
 // Progress Circle setup
@@ -33,7 +33,7 @@ export function updateDisplay() {
 }
 
 function getModeName(mode) {
-    switch(mode) {
+    switch (mode) {
         case 'pomodoro': return 'Focus';
         case 'shortBreak': return 'Short Break';
         case 'longBreak': return 'Long Break';
@@ -51,16 +51,16 @@ export function setMode(mode) {
         }
         stopTimer(false);
     }
-    
+
     state.mode = mode;
     state.timeRemaining = state.settings[mode] * 60;
-    
+
     elements.body.className = `mode-${mode}`;
-    
+
     elements.modeBtns.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-    
+
     updateDisplay();
     updateStatusText();
 }
@@ -77,13 +77,13 @@ function startTimer() {
     state.isRunning = true;
     elements.mainBtn.textContent = 'Pause';
     updateStatusText();
-    
+
     toggleBackgroundSound(true);
-    
+
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
     }
-    
+
     let expected = Date.now() + 1000;
     state.timerId = setInterval(() => {
         const diff = Date.now() - expected;
@@ -105,7 +105,7 @@ function stopTimer(completed = false) {
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
     toggleBackgroundSound(false);
-    
+
     if (!completed) {
         updateStatusText();
     }
@@ -133,13 +133,21 @@ function showNotification(title, body) {
 function handleTimerComplete() {
     stopTimer(true);
     playAlarm();
-    
+
     if (state.mode === 'pomodoro') {
         state.pomodorosCompleted++;
-        
+
+        // Record Analytics
+        const today = new Date().toISOString().split('T')[0];
+        if (!state.focusHistory[today]) {
+            state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
+        }
+        state.focusHistory[today].pomodoros++;
+        state.focusHistory[today].seconds += state.settings.pomodoro * 60;
+
         // Notify tasks module via app.js
         timerEvents.onPomodoroComplete();
-        
+
         if (state.pomodorosCompleted % state.settings.longBreakInterval === 0) {
             showNotification('Pomodoro Completed!', 'Time for a long break.');
             setMode('longBreak');
@@ -147,15 +155,15 @@ function handleTimerComplete() {
             showNotification('Pomodoro Completed!', 'Time for a short break.');
             setMode('shortBreak');
         }
-        
+
         if (state.settings.autoStartBreaks) {
             setTimeout(startTimer, 1000);
         }
-        
+
     } else {
         showNotification('Break is over!', 'Time to focus.');
         setMode('pomodoro');
-        
+
         if (state.settings.autoStartPomodoros) {
             setTimeout(startTimer, 1000);
         }

@@ -1,5 +1,5 @@
 export const state = {
-    mode: 'pomodoro', 
+    mode: 'pomodoro',
     timeRemaining: 25 * 60,
     isRunning: false,
     timerId: null,
@@ -17,18 +17,24 @@ export const state = {
         tickingSound: 'none',
         volume: 50,
         darkMode: true
-    }
+    },
+    focusHistory: {} // Format: { "YYYY-MM-DD": { seconds: 0, pomodoros: 0 } }
 };
 
 export function loadSettings() {
     const saved = localStorage.getItem('pomodoro_settings');
     if (saved) {
         try {
-            state.settings = { ...state.settings, ...JSON.parse(saved) };
-        } catch(e) {}
+            const data = JSON.parse(saved);
+            state.settings = { ...state.settings, ...(data.settings || data) };
+            state.focusHistory = data.focusHistory || {};
+        } catch (e) { }
     }
 }
 
 export function saveSettings() {
-    localStorage.setItem('pomodoro_settings', JSON.stringify(state.settings));
+    localStorage.setItem('pomodoro_settings', JSON.stringify({
+        settings: state.settings,
+        focusHistory: state.focusHistory
+    }));
 }

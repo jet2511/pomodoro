@@ -6,10 +6,12 @@ import { toggleSettingsModal, saveSettings, applyTheme } from './modules/setting
 import { updateVolume } from './modules/audio.js';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
+import { updateStatsUI } from './modules/stats.js';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
     updateTaskPomodoros();
+    updateStatsUI();
     const user = getCurrentUser();
     if (user) syncDataToCloud(user);
 };
@@ -40,7 +42,7 @@ elements.form.addEventListener('submit', (e) => {
         elements.taskInput.value = '';
         elements.estPomodorosInput.value = '1';
         elements.taskInput.focus();
-        
+
         const user = getCurrentUser();
         if (user) syncDataToCloud(user);
     }
@@ -54,7 +56,7 @@ elements.taskList.addEventListener('click', (e) => {
         if (user) syncDataToCloud(user);
         return;
     }
-    
+
     const contentBtn = e.target.closest('[data-action="activate"]');
     if (contentBtn) {
         setActiveTask(contentBtn.dataset.id);
@@ -62,7 +64,7 @@ elements.taskList.addEventListener('click', (e) => {
         if (user) syncDataToCloud(user);
         return;
     }
-    
+
     const deleteBtn = e.target.closest('[data-action="delete"]');
     if (deleteBtn) {
         deleteTask(deleteBtn.dataset.id);
@@ -78,7 +80,7 @@ elements.closeSettingsBtn.addEventListener('click', () => toggleSettingsModal(fa
 elements.saveSettingsBtn.addEventListener('click', () => {
     saveSettings();
     toggleSettingsModal(false);
-    
+
     const user = getCurrentUser();
     if (user) syncDataToCloud(user);
 });
@@ -89,9 +91,27 @@ elements.inputs.volume.addEventListener('input', (e) => {
 
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', (e) => {
+    // Check if user is typing in an input or textarea
+    const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+
     if (e.key === 'Escape') {
         if (!elements.settingsModal.classList.contains('hidden')) toggleSettingsModal(false);
         if (!elements.authModal.classList.contains('hidden')) toggleAuthModal(false);
+    }
+
+    // Keyboard Shortcuts (only if not typing)
+    if (!isTyping) {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            toggleTimer();
+        }
+        if (e.key.toLowerCase() === 's') {
+            skipPhase();
+        }
+        if (e.key.toLowerCase() === 't') {
+            e.preventDefault();
+            elements.taskInput.focus();
+        }
     }
 });
 elements.settingsModal.addEventListener('click', (e) => {
@@ -108,8 +128,9 @@ function init() {
     applyTheme();
     updateVolume();
     loadTasks();
+    updateStatsUI();
     setMode('pomodoro');
-    
+
     // Initialize Firebase Auth
     initAuth();
 }
