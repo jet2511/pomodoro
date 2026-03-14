@@ -70,7 +70,9 @@ export const elements = {
     statTotalPomodoros: document.getElementById('stat-total-pomodoros'),
     statTodayTime: document.getElementById('stat-today-time'),
 
-    // Compact Mode & PiP
-    compactBtn: document.getElementById('compact-btn'),
+    // Timer Section
+    timerSection: document.querySelector('.timer-section'),
+
+    // PiP
     pipBtn: document.getElementById('pip-btn')
 };

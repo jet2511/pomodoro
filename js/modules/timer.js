@@ -45,8 +45,8 @@ export function formatTime(seconds) {
 export function updateDisplay() {
     elements.timeDisplay.textContent = formatTime(state.timeRemaining);
     const totalTime = state.settings[state.mode] * 60;
-    const MathPercent = Math.max(0, state.timeRemaining / totalTime);
-    const percentage = MathPercent * 100;
+    const mathPercent = Math.max(0, state.timeRemaining / totalTime);
+    const percentage = mathPercent * 100;
     setProgress(100 - percentage);
     document.title = `${formatTime(state.timeRemaining)} - ${getModeName(state.mode)}`;
 }

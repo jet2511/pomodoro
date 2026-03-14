@@ -31,8 +31,6 @@
             <div class="header-actions">
                 <button id="pip-btn" class="header-btn" title="Picture-in-Picture (P)" style="display:none;"><i
                         class="fa-solid fa-window-restore"></i></button>
-                <button id="compact-btn" class="header-btn" title="Compact Mode (C)"><i
-                        class="fa-solid fa-compress"></i></button>
                 <button id="auth-btn" class="header-btn" title="Login / Sync"><i class="fa-solid fa-user"></i> <span
                         id="auth-username" style="display:none; font-size:0.8rem; margin-left: 5px;"></span></button>
                 <button id="settings-btn" class="header-btn" aria-label="Settings"><i
@@ -63,6 +61,7 @@
                     <button id="skip-btn" class="control-btn secondary" title="Skip to next phase"><i
                             class="fa-solid fa-forward-step"></i></button>
                 </div>
+                <div id="pip-current-task" class="pip-only"></div>
                 <div class="status-text" id="status-text">Ready to focus?</div>
             </section>
 
@@ -140,9 +139,10 @@
                         </div>
                     </div>
                     <div class="setting-row">
-                        <label for="setting-longBreakInterval">Long Break interval</label>
-                        <input type="number" id="setting-longBreakInterval" min="1" max="10" value="4"
-                            class="inline-input">
+                        <div class="input-group">
+                            <label for="setting-longBreakInterval">Long Break interval</label>
+                            <input type="number" id="setting-longBreakInterval" min="1" max="10" value="4">
+                        </div>
                     </div>
                 </div>
 

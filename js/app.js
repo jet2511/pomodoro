@@ -7,7 +7,7 @@ import { updateVolume } from './modules/audio.js';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
-import { initPiP, togglePiP } from './modules/pip.js';
+import { initPiP, togglePiP, updatePipTask } from './modules/pip.js';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
@@ -19,6 +19,7 @@ timerEvents.onPomodoroComplete = () => {
 
 taskEvents.onTaskActivated = () => {
     setMode('pomodoro');
+    updatePipTask();
 };
 
 // ... Timer Event Listeners ...
@@ -43,6 +44,7 @@ elements.form.addEventListener('submit', (e) => {
         elements.taskInput.value = '';
         elements.estPomodorosInput.value = '1';
         elements.taskInput.focus();
+        updatePipTask();
 
         const user = getCurrentUser();
         if (user) syncDataToCloud(user);
@@ -53,6 +55,7 @@ elements.taskList.addEventListener('click', (e) => {
     const checkBtn = e.target.closest('[data-action="toggle"]');
     if (checkBtn) {
         toggleTaskComplete(checkBtn.dataset.id);
+        updatePipTask();
         const user = getCurrentUser();
         if (user) syncDataToCloud(user);
         return;
@@ -61,6 +64,7 @@ elements.taskList.addEventListener('click', (e) => {
     const contentBtn = e.target.closest('[data-action="activate"]');
     if (contentBtn) {
         setActiveTask(contentBtn.dataset.id);
+        updatePipTask();
         const user = getCurrentUser();
         if (user) syncDataToCloud(user);
         return;
@@ -69,6 +73,7 @@ elements.taskList.addEventListener('click', (e) => {
     const deleteBtn = e.target.closest('[data-action="delete"]');
     if (deleteBtn) {
         deleteTask(deleteBtn.dataset.id);
+        updatePipTask();
         const user = getCurrentUser();
         if (user) syncDataToCloud(user);
         return;
@@ -90,13 +95,6 @@ elements.inputs.volume.addEventListener('input', (e) => {
     elements.volumeDisplay.textContent = e.target.value;
 });
 
-// --- Compact Mode ---
-function toggleCompactMode(force) {
-    const isCompact = force !== undefined ? force : !document.body.classList.contains('compact-mode');
-    document.body.classList.toggle('compact-mode', isCompact);
-}
-
-elements.compactBtn.addEventListener('click', () => toggleCompactMode());
 
 // ... PiP Listener ...
 elements.pipBtn.addEventListener('click', togglePiP);
@@ -123,9 +121,6 @@ document.addEventListener('keydown', (e) => {
         if (e.key.toLowerCase() === 't') {
             e.preventDefault();
             elements.taskInput.focus();
-        }
-        if (e.key.toLowerCase() === 'c') {
-            toggleCompactMode();
         }
         if (e.key.toLowerCase() === 'p') {
             togglePiP();

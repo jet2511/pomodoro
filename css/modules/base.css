@@ -54,12 +54,18 @@ body.mode-longBreak { background-color: var(--clr-bg-long); }
     max-width: 480px;
 }
 
-/* Header */
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+}
+
+@media (max-width: 480px) {
+    header {
+        padding-top: 1rem;
+        margin-bottom: 3rem;
+    }
 }
 
 h1 {

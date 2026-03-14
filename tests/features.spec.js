@@ -1,137 +1,85 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://127.0.0.1:8080';
+
 test.describe('FocusTimer Advanced Features', () => {
     test.beforeEach(async ({ page }) => {
-        // Expecting the server to be running on 8080
-        await page.goto('http://localhost:3000');
+        await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     });
 
-    test('should display total pomodoros in stats', async ({ page }) => {
-        const totalPomodoros = page.locator('#stat-total-pomodoros');
-        await expect(totalPomodoros).toBeVisible();
-        await expect(totalPomodoros).toHaveText('0');
+    test('displays basic stats placeholders', async ({ page }) => {
+        await expect(page.locator('#stat-total-pomodoros')).toBeVisible();
+        await expect(page.locator('#stat-total-pomodoros')).toHaveText('0');
+        await expect(page.locator('#stat-today-time')).toHaveText('0h 0m');
     });
 
-    test('keyboard shortcuts should work', async ({ page }) => {
-        // Space to start
-        await page.keyboard.press(' ');
+    test('keyboard shortcuts control the timer and focus', async ({ page }) => {
         const mainBtn = page.locator('#main-btn');
+        await page.keyboard.press(' ');
         await expect(mainBtn).toHaveText('Pause');
 
-        // Space to pause
         await page.keyboard.press(' ');
         await expect(mainBtn).toHaveText('Start');
 
-        // 'T' to focus task input
         await page.keyboard.press('t');
-        const taskInput = page.locator('#task-input');
-        await expect(taskInput).toBeFocused();
+        await expect(page.locator('#task-input')).toBeFocused();
     });
 
-    test('should allow task reordering via drag and drop', async ({ page }) => {
-        // Add two tasks
+    test('allows task reordering via drag and drop', async ({ page }) => {
         await page.fill('#task-input', 'Task 1');
         await page.click('#add-task-form button[type="submit"]');
-
         await page.fill('#task-input', 'Task 2');
         await page.click('#add-task-form button[type="submit"]');
 
         const tasks = page.locator('.task-item');
         await expect(tasks).toHaveCount(2);
-
-        // Check initial order
         await expect(tasks.nth(0)).toContainText('Task 1');
         await expect(tasks.nth(1)).toContainText('Task 2');
 
-        // Perform drag and drop (Task 2 to Task 1)
-        const task2 = tasks.nth(1).locator('.task-content');
-        const task1 = tasks.nth(0);
-
-        await task2.dragTo(task1);
-
-        // Verify new order
+        await tasks.nth(1).locator('.task-content').dragTo(tasks.nth(0));
         await expect(tasks.nth(0)).toContainText('Task 2');
         await expect(tasks.nth(1)).toContainText('Task 1');
     });
 
-    test('should toggle compact mode', async ({ page }) => {
-        // Check initial state
-        await expect(page.locator('body')).not.toHaveClass(/compact-mode/);
 
-        // Toggle via button
-        await page.click('#compact-btn');
-        await expect(page.locator('body')).toHaveClass(/compact-mode/);
-
-        // Toggle via keyboard 'C'
-        await page.keyboard.press('c');
-        await expect(page.locator('body')).not.toHaveClass(/compact-mode/);
-    });
-
-    test('should update favicon color on mode switch', async ({ page }) => {
-        // Initial favicon (data URI)
+    test('updates favicon when switching modes', async ({ page }) => {
         const initialFavicon = await page.locator("link[rel~='icon']").getAttribute('href');
         expect(initialFavicon).toContain('data:image/svg+xml');
 
-        // Switch to Short Break
         await page.click('button[data-mode="shortBreak"]');
         const breakFavicon = await page.locator("link[rel~='icon']").getAttribute('href');
 
         expect(breakFavicon).not.toBe(initialFavicon);
-        expect(decodeURIComponent(breakFavicon)).toContain('#38858a'); // Short break teal color
+        expect(decodeURIComponent(breakFavicon ?? '')).toContain('#38858a');
     });
 
-    test('should attempt to open picture-in-picture', async ({ page }) => {
-        // Mock the Document PiP API before the page loads
+    test('attempts Picture-in-Picture when supported', async ({ page }) => {
         await page.addInitScript(() => {
             window.__pipCalled = false;
             const mockPiP = {
                 requestWindow: async () => {
-                    console.log('--- MOCKED requestWindow CALLED ---');
                     window.__pipCalled = true;
                     return {
                         document: {
-                            body: {
-                                append: () => { },
-                                classList: { add: () => { } }
-                            },
+                            body: { append: () => { }, classList: { add: () => { } } },
                             head: { appendChild: () => { } }
                         },
                         addEventListener: () => { },
                         close: () => { },
-                        location: { href: '' }
                     };
                 }
             };
-
             Object.defineProperty(window, 'documentPictureInPicture', {
                 value: mockPiP,
                 configurable: true,
                 writable: true
             });
-
-            console.log('PiP API Mocked successfully');
         });
 
-        // Toggle capture of console logs
-        const logs = [];
-        page.on('console', msg => logs.push(msg.text()));
-
-        // Reload to apply init script
         await page.reload();
-
-        // Ensure the PiP button is visible
-        const pipBtn = page.locator('#pip-btn');
-        await expect(pipBtn).toBeVisible();
-
-        // Click the button
-        await pipBtn.click();
-
-        // Wait for the mock to be called
+        await expect(page.locator('#pip-btn')).toBeVisible();
+        await page.click('#pip-btn');
         await page.waitForFunction(() => window.__pipCalled === true, { timeout: 5000 });
-
-        // Verify the mock was called
-        const pipCalled = await page.evaluate(() => window.__pipCalled);
-        console.log('Test Logs:', logs);
-        expect(pipCalled).toBe(true);
+        await expect(page.evaluate(() => window.__pipCalled)).resolves.toBe(true);
     });
 });
