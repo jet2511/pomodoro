@@ -1,4 +1,5 @@
-import { getDb } from './firebase.js';
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { getDbRef } from './firebase.js';
 import { state } from './state.js';
 import { saveTasks, renderTasks } from './tasks.js';
 import { applySettingsToUI, applyTheme } from './settings.js';
@@ -7,15 +8,15 @@ import { setMode } from './timer.js';
 
 export async function syncDataToCloud(user) {
     if (!user) return;
-    const db = getDb();
+    const db = getDbRef();
     if (!db) return; // DB not initialized yet (missing real config)
     
     try {
-        const userRef = db.collection('users').doc(user.uid);
-        await userRef.set({
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, {
             tasks: state.tasks,
             settings: state.settings,
-            lastSynced: firebase.firestore.FieldValue.serverTimestamp()
+            lastSynced: serverTimestamp()
         }, { merge: true });
         console.log("Data synced to cloud successfully.");
     } catch (e) {
@@ -25,15 +26,15 @@ export async function syncDataToCloud(user) {
 
 export async function loadDataFromCloud(user) {
     if (!user) return;
-    const db = getDb();
+    const db = getDbRef();
     if (!db) return;
     
     try {
-        const userRef = db.collection('users').doc(user.uid);
-        const doc = await userRef.get();
+        const userRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(userRef);
         
-        if (doc.exists) {
-            const data = doc.data();
+        if (docSnap.exists()) {
+            const data = docSnap.data();
             console.log("Cloud data found, merging with local state...");
             
             // For settings, cloud takes precedence if exists

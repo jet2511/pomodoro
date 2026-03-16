@@ -1,3 +1,7 @@
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
 // Placeholder Firebase Configuration
 // USER MUST REPLACE THIS WITH THEIR ACTUAL CONFIG
 const firebaseConfig = {
@@ -13,18 +17,17 @@ let app, auth, db, googleProvider;
 
 export function initFirebase() {
     try {
-        if (!firebase.apps.length) {
-            app = firebase.initializeApp(firebaseConfig);
-            auth = firebase.auth();
-            db = firebase.firestore();
-            googleProvider = new firebase.auth.GoogleAuthProvider();
-            console.log("Firebase placeholder initialized.");
-        }
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        googleProvider = new GoogleAuthProvider();
+        console.log("Firebase modular SDK initialized.");
     } catch (e) {
         console.error("Firebase initialization failed:", e);
     }
 }
 
-export function getAuth() { return auth; }
-export function getDb() { return db; }
-export function getGoogleProvider() { return googleProvider; }
+export function getAppRef() { return app; }
+export function getAuthRef() { return auth; }
+export function getDbRef() { return db; }
+export function getGoogleProviderRef() { return googleProvider; }
