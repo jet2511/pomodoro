@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://jet2511.github.io/pomodoro/sitemap.xml

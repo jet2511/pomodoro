@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusTimer - Pomodoro App</title>
+    <meta name="description" content="A beautiful, interactive Pomodoro timer to help you focus and manage tasks.">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+
+    <!-- PWA Support -->
+    <meta name="theme-color" content="#ba4949">
+    <link rel="apple-touch-icon" href="/pomodoro/icons/icon-192.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script type="module" crossorigin src="/pomodoro/assets/index-BRux4PzL.js"></script>
+  <link rel="stylesheet" crossorigin href="/pomodoro/assets/index-BvVqZIi4.css">
+<link rel="manifest" href="/pomodoro/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/pomodoro/registerSW.js"></script></head>
+
+<body class="mode-pomodoro">
+    <div class="app-container" id="app">
+        <header>
+            <h1><i class="fa-solid fa-clock"></i> FocusTimer</h1>
+            <div class="header-actions">
+                <button id="pip-btn" class="header-btn" title="Picture-in-Picture (P)" style="display:none;"><i
+                        class="fa-solid fa-window-restore"></i></button>
+                <button id="auth-btn" class="header-btn" title="Login / Sync"><i class="fa-solid fa-user"></i> <span
+                        id="auth-username" style="display:none; font-size:0.8rem; margin-left: 5px;"></span></button>
+                <button id="settings-btn" class="header-btn" aria-label="Settings"><i
+                        class="fa-solid fa-gear"></i></button>
+            </div>
+        </header>
+
+        <main>
+            <section class="timer-section glass-panel">
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="pomodoro">Pomodoro</button>
+                    <button class="mode-btn" data-mode="shortBreak">Short Break</button>
+                    <button class="mode-btn" data-mode="longBreak">Long Break</button>
+                </div>
+
+                <div class="timer-display">
+                    <svg class="progress-ring" width="250" height="250">
+                        <circle class="progress-ring__circle-bg" stroke="rgba(255, 255, 255, 0.1)" stroke-width="8"
+                            fill="transparent" r="115" cx="125" cy="125" />
+                        <circle class="progress-ring__circle" stroke="white" stroke-width="8" fill="transparent" r="115"
+                            cx="125" cy="125" />
+                    </svg>
+                    <div class="time" id="time-display">25:00</div>
+                </div>
+
+                <div class="controls">
+                    <button id="main-btn" class="control-btn primary">Start</button>
+                    <button id="skip-btn" class="control-btn secondary" title="Skip to next phase"><i
+                            class="fa-solid fa-forward-step"></i></button>
+                </div>
+                <div id="pip-current-task" class="pip-only"></div>
+                <div class="status-text" id="status-text">Ready to focus?</div>
+            </section>
+
+            <section class="stats-section glass-panel">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-total-pomodoros">0</span>
+                        <span class="stat-label">Pomodoros</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-today-time">0h 0m</span>
+                        <span class="stat-label">Focused Today</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="tasks-section">
+                <div class="tasks-header">
+                    <h2>Tasks</h2>
+                </div>
+
+                <form id="add-task-form" class="task-form glass-panel">
+                    <div class="task-input-wrapper">
+                        <input type="text" id="task-input" placeholder="What are you working on?" required
+                            autocomplete="off">
+                        <div class="est-pomodoros-inline">
+                            <i class="fa-solid fa-hourglass-half"></i>
+                            <input type="number" id="est-pomodoros-input" min="1" max="10" value="1" required
+                                title="Estimated Pomodoros">
+                        </div>
+                    </div>
+                    <button type="submit" class="add-btn" aria-label="Add Task"><i class="fa-solid fa-plus"></i> Add
+                        Task</button>
+                </form>
+
+                <div class="task-list" id="task-list">
+                    <!-- Tasks will be injected here via JavaScript -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="bell-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+    <audio id="bird-sound" src="https://assets.mixkit.co/active_storage/sfx/2866/2866-preview.mp3"></audio>
+    <audio id="digital-sound" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
+    <audio id="tick-sound" src="https://assets.mixkit.co/active_storage/sfx/2800/2800-preview.mp3" loop></audio>
+    <audio id="rain-sound" src="https://assets.mixkit.co/active_storage/sfx/2827/2827-preview.mp3" loop></audio>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button id="close-settings-btn" class="icon-btn" aria-label="Close settings"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Timer Settings -->
+                <div class="setting-section">
+                    <h3><i class="fa-regular fa-clock"></i> Timer (minutes)</h3>
+                    <div class="setting-row timer-inputs">
+                        <div class="input-group">
+                            <label for="setting-pomodoro">Pomodoro</label>
+                            <input type="number" id="setting-pomodoro" min="1" max="90" value="25">
+                        </div>
+                        <div class="input-group">
+                            <label for="setting-shortBreak">Short Break</label>
+                            <input type="number" id="setting-shortBreak" min="1" max="30" value="5">
+                        </div>
+                        <div class="input-group">
+                            <label for="setting-longBreak">Long Break</label>
+                            <input type="number" id="setting-longBreak" min="1" max="60" value="15">
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="input-group">
+                            <label for="setting-longBreakInterval">Long Break interval</label>
+                            <input type="number" id="setting-longBreakInterval" min="1" max="10" value="4">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automation Settings -->
+                <div class="setting-section">
+                    <h3><i class="fa-solid fa-robot"></i> Automation</h3>
+                    <div class="setting-row toggle-row">
+                        <label for="setting-autoStartBreaks">Auto-start Breaks</label>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-autoStartBreaks">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row toggle-row">
+                        <label for="setting-autoStartPomodoros">Auto-start Pomodoros</label>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-autoStartPomodoros">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Audio Settings -->
+                <div class="setting-section">
+                    <h3><i class="fa-solid fa-volume-high"></i> Audio</h3>
+                    <div class="setting-row">
+                        <label for="setting-alarmSound">Alarm Sound</label>
+                        <select id="setting-alarmSound" class="styled-select">
+                            <option value="bell">Digital Bell</option>
+                            <option value="bird">Bird Chirp</option>
+                            <option value="digital">Retro Alarm</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <label for="setting-tickingSound">Background Sound</label>
+                        <select id="setting-tickingSound" class="styled-select">
+                            <option value="none">None</option>
+                            <option value="tick">Clock Ticking</option>
+                            <option value="rain">Light Rain</option>
+                        </select>
+                    </div>
+                    <div class="setting-row volume-row">
+                        <label for="setting-volume">Alarm Volume (<span id="volume-display">50</span>%)</label>
+                        <input type="range" id="setting-volume" min="0" max="100" value="50" class="styled-slider">
+                    </div>
+                </div>
+
+                <!-- Theme Settings -->
+                <div class="setting-section">
+                    <h3><i class="fa-solid fa-palette"></i> Theme</h3>
+                    <div class="setting-row toggle-row">
+                        <label for="setting-darkMode">Dark Mode</label>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-darkMode" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="save-settings-btn" class="control-btn primary modal-primary-btn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 350px;">
+            <div class="modal-header">
+                <h2>Account & Sync</h2>
+                <button id="close-auth-btn" class="icon-btn" aria-label="Close auth"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body auth-body">
+                <div id="auth-logged-out-view">
+                    <div class="dev-badge"><i class="fa-solid fa-hammer"></i> Tính năng đang phát triển</div>
+                    <p class="auth-description">Sign in to sync your tasks and settings across devices.</p>
+
+                    <button id="google-login-btn" class="auth-provider-btn google-btn">
+                        <i class="fa-brands fa-google"></i> Continue with Google
+                    </button>
+
+                    <div class="auth-divider"><span>or</span></div>
+
+                    <form id="email-auth-form" class="auth-form">
+                        <input type="email" id="auth-email" placeholder="Email" required autocomplete="email">
+                        <input type="password" id="auth-password" placeholder="Password" required
+                            autocomplete="current-password">
+                        <div class="auth-actions">
+                            <button type="submit" id="email-login-btn" class="auth-submit-btn">Login</button>
+                            <button type="button" id="email-register-btn" class="auth-secondary-btn">Register</button>
+                        </div>
+                        <div id="auth-error-msg" class="auth-error" style="display:none;"></div>
+                    </form>
+                </div>
+
+                <div id="auth-logged-in-view" style="display:none;">
+                    <div class="user-profile">
+                        <div class="avatar-placeholder"><i class="fa-solid fa-user"></i></div>
+                        <div class="user-details">
+                            <p id="user-display-name">User</p>
+                            <p id="user-email" class="text-muted">user@example.com</p>
+                        </div>
+                    </div>
+
+                    <div class="sync-status">
+                        <p><i class="fa-solid fa-cloud-arrow-up"></i> Cloud Sync: <span id="sync-indicator"
+                                class="sync-active">Active</span></p>
+                        <p class="sync-note">Your tasks are saved to the cloud automatically.</p>
+                    </div>
+
+                    <button id="logout-btn" class="auth-secondary-btn danger-btn"
+                        style="width: 100%; margin-top: 1rem;">Log Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Configuration & Modules -->
+
+</body>
+
+</html>
