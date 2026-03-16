@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://127.0.0.1:8080';
+const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://localhost:5174/pomodoro/';
 
 test.describe('FocusTimer Advanced Features', () => {
     test.beforeEach(async ({ page }) => {
@@ -59,10 +59,18 @@ test.describe('FocusTimer Advanced Features', () => {
             const mockPiP = {
                 requestWindow: async () => {
                     window.__pipCalled = true;
+                    // Mock PiP window body with necessary elements for styles/task update
+                    const pipBody = { 
+                        append: () => { }, 
+                        classList: { add: () => { } },
+                        className: ''
+                    };
                     return {
                         document: {
-                            body: { append: () => { }, classList: { add: () => { } } },
-                            head: { appendChild: () => { } }
+                            body: pipBody,
+                            head: { appendChild: () => { } },
+                            getElementById: (id) => id === 'pip-current-task' ? { textContent: '' } : null,
+                            styleSheets: []
                         },
                         addEventListener: () => { },
                         close: () => { },

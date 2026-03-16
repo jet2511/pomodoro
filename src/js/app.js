@@ -111,7 +111,7 @@ document.addEventListener('keydown', (e) => {
 
     // Keyboard Shortcuts (only if not typing)
     if (!isTyping) {
-        if (e.code === 'Space') {
+        if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             toggleTimer();
         }
