@@ -1,4 +1,4 @@
-import { state, saveSettings as saveStateSettings } from './state.js';
+import { state, saveSettings as saveStateSettings, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { setMode } from './timer.js';
 import { updateVolume } from './audio.js';
@@ -49,6 +49,7 @@ export function saveSettings() {
     if (!state.isRunning) {
         setMode(state.mode);
     }
+    notifyStateChange();
 }
 
 export function toggleSettingsModal(show) {

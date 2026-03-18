@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { toggleBackgroundSound, playAlarm } from './audio.js';
 
@@ -106,7 +106,13 @@ function startTimer() {
 
     let expected = Date.now() + 1000;
     state.timerId = setInterval(() => {
-        const diff = Date.now() - expected;
+        const now = Date.now();
+        const drift = now - expected;
+        
+        // If drift is too large (e.g. tab was suspended), we might want to catch up
+        // or just decrement based on actual time elapsed.
+        // For simplicity, we'll just handle the single tick and adjust next expected.
+        
         if (state.timeRemaining > 0) {
             state.timeRemaining--;
             updateDisplay();
@@ -164,6 +170,8 @@ function handleTimerComplete() {
         }
         state.focusHistory[today].pomodoros++;
         state.focusHistory[today].seconds += state.settings.pomodoro * 60;
+
+        notifyStateChange();
 
         // Notify tasks module via app.js
         timerEvents.onPomodoroComplete();

@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 
 export const taskEvents = {
@@ -37,6 +37,7 @@ export function addTask(title, estPomodoros) {
     state.tasks.push(newTask);
     saveTasks();
     renderTasks();
+    notifyStateChange();
 }
 
 export function toggleTaskComplete(id) {
@@ -49,6 +50,7 @@ export function toggleTaskComplete(id) {
         }
         saveTasks();
         renderTasks();
+        notifyStateChange();
     }
 }
 
@@ -60,6 +62,7 @@ export function setActiveTask(id) {
         state.activeTaskId = id;
         saveTasks();
         renderTasks();
+        notifyStateChange();
 
         taskEvents.onTaskActivated();
     }
@@ -72,6 +75,7 @@ export function deleteTask(id) {
     }
     saveTasks();
     renderTasks();
+    notifyStateChange();
 }
 
 export function updateTaskPomodoros() {
@@ -82,6 +86,7 @@ export function updateTaskPomodoros() {
         task.actualPomodoros++;
         saveTasks();
         renderTasks();
+        notifyStateChange();
     }
 }
 
@@ -155,5 +160,6 @@ function reorderTasks(draggedId, targetId) {
         state.tasks.splice(targetIndex, 0, draggedTask);
         saveTasks();
         renderTasks();
+        notifyStateChange();
     }
 }

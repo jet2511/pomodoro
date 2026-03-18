@@ -6,11 +6,16 @@ import { applySettingsToUI, applyTheme } from './settings.js';
 import { updateVolume } from './audio.js';
 import { setMode } from './timer.js';
 
+export const syncEvents = {
+    onSyncStatusChange: () => { }
+};
+
 export async function syncDataToCloud(user) {
     if (!user) return;
     const db = getDbRef();
     if (!db) return; // DB not initialized yet (missing real config)
     
+    syncEvents.onSyncStatusChange('syncing');
     try {
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
@@ -18,8 +23,10 @@ export async function syncDataToCloud(user) {
             settings: state.settings,
             lastSynced: serverTimestamp()
         }, { merge: true });
+        syncEvents.onSyncStatusChange('synced');
         console.log("Data synced to cloud successfully.");
     } catch (e) {
+        syncEvents.onSyncStatusChange('error');
         console.error("Error syncing to cloud:", e);
     }
 }

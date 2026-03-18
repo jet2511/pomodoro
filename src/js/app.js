@@ -1,5 +1,5 @@
 import { elements } from './modules/elements.js';
-import { loadSettings } from './modules/state.js';
+import { loadSettings, stateEvents } from './modules/state.js';
 import { setMode, toggleTimer, skipPhase, timerEvents } from './modules/timer.js';
 import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, updateTaskPomodoros, taskEvents } from './modules/tasks.js';
 import { toggleSettingsModal, saveSettings, applyTheme } from './modules/settings.js';
@@ -8,13 +8,12 @@ import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
 import { initPiP, togglePiP, updatePipTask } from './modules/pip.js';
+import { isUserTyping, debounce } from './modules/utils.js';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
     updateTaskPomodoros();
     updateStatsUI();
-    const user = getCurrentUser();
-    if (user) syncDataToCloud(user);
 };
 
 taskEvents.onTaskActivated = () => {
@@ -45,9 +44,6 @@ elements.form.addEventListener('submit', (e) => {
         elements.estPomodorosInput.value = '1';
         elements.taskInput.focus();
         updatePipTask();
-
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
     }
 });
 
@@ -56,8 +52,6 @@ elements.taskList.addEventListener('click', (e) => {
     if (checkBtn) {
         toggleTaskComplete(checkBtn.dataset.id);
         updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
         return;
     }
 
@@ -65,8 +59,6 @@ elements.taskList.addEventListener('click', (e) => {
     if (contentBtn) {
         setActiveTask(contentBtn.dataset.id);
         updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
         return;
     }
 
@@ -74,8 +66,6 @@ elements.taskList.addEventListener('click', (e) => {
     if (deleteBtn) {
         deleteTask(deleteBtn.dataset.id);
         updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
         return;
     }
 });
@@ -86,9 +76,6 @@ elements.closeSettingsBtn.addEventListener('click', () => toggleSettingsModal(fa
 elements.saveSettingsBtn.addEventListener('click', () => {
     saveSettings();
     toggleSettingsModal(false);
-
-    const user = getCurrentUser();
-    if (user) syncDataToCloud(user);
 });
 
 elements.inputs.volume.addEventListener('input', (e) => {
@@ -102,7 +89,7 @@ elements.pipBtn.addEventListener('click', togglePiP);
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', (e) => {
     // Check if user is typing in an input or textarea
-    const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    const typing = isUserTyping(e);
 
     if (e.key === 'Escape') {
         if (!elements.settingsModal.classList.contains('hidden')) toggleSettingsModal(false);
@@ -110,7 +97,7 @@ document.addEventListener('keydown', (e) => {
     }
 
     // Keyboard Shortcuts (only if not typing)
-    if (!isTyping) {
+    if (!typing) {
         if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             toggleTimer();
@@ -144,6 +131,14 @@ function init() {
     updateStatsUI();
     setMode('pomodoro');
     initPiP();
+
+    // Centralized Syncing
+    const debouncedSync = debounce(() => {
+        const user = getCurrentUser();
+        if (user) syncDataToCloud(user);
+    }, 2000);
+
+    stateEvents.onStateChange = debouncedSync;
 
     // Initialize Firebase Auth
     initAuth();
