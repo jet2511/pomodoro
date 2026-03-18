@@ -235,9 +235,16 @@
     /* Green tint */
 }
 
-:root[data-theme="light"] .sync-active {
+.synced { color: #70f8d0; }
+.syncing { color: #fff3ce; }
+.error { color: #ffb3b3; }
+
+:root[data-theme="light"] .sync-active,
+:root[data-theme="light"] .synced {
     color: #2e7d32;
 }
+:root[data-theme="light"] .syncing { color: #fbc02d; }
+:root[data-theme="light"] .error { color: #d32f2f; }
 
 .sync-note {
     font-size: 0.85rem;

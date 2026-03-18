@@ -1,7 +1,6 @@
-import { onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
-import { loadDataFromCloud } from './sync.js';
+import { loadDataFromCloud, syncEvents } from './sync.js';
 
 let currentUser = null;
 
@@ -30,6 +29,11 @@ export function initAuth() {
     elements.googleLoginBtn.addEventListener('click', signInWithGoogle);
     elements.emailLoginBtn.addEventListener('click', (e) => handleEmailAuth(e, 'login'));
     elements.emailRegisterBtn.addEventListener('click', (e) => handleEmailAuth(e, 'register'));
+    // Listen for sync status
+    syncEvents.onSyncStatusChange = (status) => {
+        updateSyncUI(status);
+    };
+
     elements.logoutBtn.addEventListener('click', signOut);
 }
 
@@ -69,6 +73,27 @@ function showLoggedOutView() {
     
     // Update header button
     elements.authUsername.style.display = 'none';
+    updateSyncUI('none');
+}
+
+function updateSyncUI(status) {
+    const indicator = elements.syncIndicator;
+    if (!indicator) return;
+
+    indicator.classList.remove('syncing', 'synced', 'error');
+    
+    if (status === 'syncing') {
+        indicator.textContent = 'Syncing...';
+        indicator.classList.add('syncing');
+    } else if (status === 'synced') {
+        indicator.textContent = 'Synced';
+        indicator.classList.add('synced');
+    } else if (status === 'error') {
+        indicator.textContent = 'Sync Error';
+        indicator.classList.add('error');
+    } else if (status === 'none') {
+        indicator.textContent = 'Not Logged In';
+    }
 }
 
 function showError(msg) {

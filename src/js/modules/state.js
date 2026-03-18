@@ -21,6 +21,18 @@ export const state = {
     focusHistory: {} // Format: { "YYYY-MM-DD": { seconds: 0, pomodoros: 0 } }
 };
 
+// Event listener for state changes (e.g., for syncing)
+export const stateEvents = {
+    onStateChange: () => { }
+};
+
+/**
+ * Notifies that the state has changed and triggers a sync if needed
+ */
+export function notifyStateChange() {
+    stateEvents.onStateChange(state);
+}
+
 export function loadSettings() {
     const saved = localStorage.getItem('pomodoro_settings');
     if (saved) {
