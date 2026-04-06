@@ -1,107 +1,104 @@
-# FocusTimer - Modern Pomodoro web app
+# 🍅 FocusTimer Pro
 
-A beautiful, functional, and deeply customizable Pomodoro Timer built with Vanilla HTML, CSS, and JavaScript. FocusTimer features a glassmorphism design, task management, dynamic themes, sound customizations, and cloud sync capabilities using Firebase.
+> **Your ultimate productivity companion.** A minimalist, high-performance Pomodoro Timer with a "Smart Square" Picture-in-Picture widget, task management, and seamless cloud sync.
 
-![Light Theme UI](.system_generated/click_feedback/click_feedback_1773152882772.png)
+![FocusTimer Preview](.system_generated/click_feedback/click_feedback_1773152882772.png)
 
-## 🚀 LIVE PREVIEW
+## ✨ Killer Feature: Smart Square PiP
+Our **Picture-in-Picture (PiP)** mode isn't just a video; it's a **fully interactive 300x300 square widget**.
+- **Always on Top**: Keep your timer visible while working in other apps.
+- **Locked Aspect Ratio**: Stays a perfect square (300x300) even if you try to resize it.
+- **Interactive Controls**: Play/Pause directly from the PiP window.
+- **Task Integration**: The name of your active task is visible right inside the PiP circle.
 
-*Note: Since this is a static project, you can host it anywhere (GitHub Pages, Netlify, Vercel) absolutely free.*
+---
 
-## ✨ Features
+## 🚀 Quick Start
 
-*   **⏱️ Three Timer Modes**
-    *   **Focus / Pomodoro:** Default 25 minutes.
-    *   **Short Break:** Default 5 minutes.
-    *   **Long Break:** Default 15 minutes.
-    *   Auto-starts breaks or next pomodoros based on your settings.
-*   **✅ Built-in Task Management**
-    *   Add tasks with estimated Pomodoros.
-    *   Set an "Active" task to route finished Pomodoros directly to that task's count.
-    *   Mark tasks completed or delete them.
-*   **⚙️ Deep Customization (Settings)**
-    *   Change duration for all 3 modes and configure the long break interval.
-    *   **Alarms:** Choose between Digital Bell, Bird Chirp, or a Retro Alarm.
-    *   **Background Sounds:** Play white noise like Clock Ticking or Light Rain while focusing.
-    *   Adjust main volume globally.
-*   **🎨 Stunning Design**
-    *   Sleek **Glassmorphism** overlays.
-    *   **Picture-in-Picture (PiP):** Keep the timer always on top in a floating window (Chrome 116+).
-    *   Dynamic background colors that adapt based on the mode (Red for Focus, Teal for Short break, Blue for Long Break).
-    *   Switch between classic **Dark Mode** and an elegant **Light Mode**.
-*   **☁️ Data Options & Cloud Sync**
-    *   **Guest Mode (Offline):** Everything (tasks and settings) defaults to save instantly in your browser's `localStorage`. No login required.
-    *   **Account Sync (Firebase):** Sign in with Google or Email/Password to sync your tasks and preferences across multiple devices automatically. 
-
-## 🏗️ Architecture & Technology Stack
-
-FocusTimer relies entirely on frontend technologies. No backend framework is required.
-
-*   **Structure:** HTML5 semantics.
-*   **Styling:** Custom CSS with CSS Variables, Flexbox, and CSS Transitions. Split into modular files (base, timer, tasks, modal, auth).
-*   **Logic:** Modern Vanilla JavaScript (ES Modules). The state is cleanly separated from DOM manipulation.
-*   **Icons:** FontAwesome (via CDN).
-*   **Font:** Inter (via Google Fonts).
-*   **Backend (Optional Sync):** Firebase v10 (Auth & Firestore via compat CDN).
-
-## 💻 Running Locally
-
-Because this project uses JavaScript ES Modules (`type="module"`), you cannot simply double-click the `index.html` file to open it in your browser (due to strict CORS policies for file:// protocols). 
-
-You must serve it over a local web server.
-
-### Option 1: Using Node.js (npx)
-If you have Node installed, run this command in the project folder:
+### 1. Installation
 ```bash
-npx serve .
+npm install
 ```
 
-### Option 2: Using Python
-If you have Python installed, run this command:
+### 2. Run Locally
 ```bash
-python -m http.server 8080
+npm run dev
 ```
-Then open `http://localhost:8080/` in your browser.
+Then visit `http://localhost:5173`
 
-## 🔥 Setting up Firebase (For Cloud Sync)
+### 3. Build for Production
+```bash
+npm run build
+```
 
-The codebase has all the UI and sync logic ready, but it currently uses a placeholder config. To authorize logins and save data to the cloud, you must link your own Firebase project.
+---
 
-1.  Go to the [Firebase Console](https://console.firebase.google.com/) and create a new Web Project.
-2.  Enable **Authentication**. Add "Google" and "Email/Password" sign-in methods.
-3.  Enable **Firestore Database** in Test Mode (or write secure security rules).
-4.  Get your `firebaseConfig` object from the Project Settings -> General tab.
-5.  Open `js/modules/firebase.js` in this repository.
-6.  Replace the `firebaseConfig` variable with your actual keys:
+## 🛠 Features
+
+*   **⏱️ Precision Timer Modes**: Focus (25m), Short Break (5m), and Long Break (15m). Auto-transition enabled.
+*   **✅ Task Management**: Track your "Estimated vs. Actual" Pomodoros per task.
+*   **🎨 Premium Glassmorphism UI**: Beautiful, translucent layers with dark/light mode support.
+*   **🔔 Custom Alerts**: Digital, Bird, or Retro alarms with adjustable volume.
+*   **💧 Ambient Backgrounds**: Light rain or steady ticking to keep you in the zone.
+*   **☁️ Firebase Sync**: Sync tasks across all your devices using Google or Email auth.
+*   **📱 PWA Ready**: Install as a standalone desktop or mobile application.
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Key | Action |
+| :--- | :--- |
+| `Space` | Start / Stop Timer |
+| `S` | Skip to the next phase |
+| `P` | Toggle Picture-in-Picture (PiP) |
+| `T` | Open Task Modal |
+| `C` | Open Settings / Customization |
+
+---
+
+## 🏗 Technology Stack
+
+- **Core**: Vanilla JavaScript (ES Modules), HTML5, CSS3.
+- **Bundler**: [Vite](https://vitejs.dev/) (Rapid development & optimized builds).
+- **Backend**: [Firebase v12](https://firebase.google.com/) (Firestore & Authentication).
+- **PWA**: [Vite PWA Plugin](https://vite-pwa-org.netlify.app/).
+- **Testing**: [Playwright](https://playwright.dev/) (End-to-end reliability).
+
+---
+
+## 🔥 Firebase Configuration
+
+FocusTimer comes ready with sync logic, but you need to add your own keys for cloud storage:
+
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/).
+2. Enable **Firestore** and **Authentication** (Google/Email).
+3. Copy your Web App config and paste it into `src/js/modules/firebase.js`:
 
 ```javascript
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "...",
+    authDomain: "...",
+    projectId: "...",
+    // ... rest of your config
 };
 ```
 
-## 🧪 Automated Testing (Node.js)
+---
 
-You can run end-to-end tests to verify Keyboard Shortcuts (`Space`, `S`, `T`, `C`, `P`), Analytics, and Drag & Drop functionality using Playwright.
+## 🧪 Testing
 
-1.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-2.  **Install Playwright browsers:**
-    ```bash
-    npx playwright install
-    ```
-3.  **Run tests (ensure your local server is running on port 8080):**
-    ```bash
-    npm test
-    ```
+We use Playwright to ensure every shortcut and timer state works perfectly.
+
+```bash
+npx playwright install
+npm test
+```
+
+---
 
 ## 🤝 Contributing
 
-Feel free to fork this project, make visual tweaks, add new alarm sounds, or modify the Firebase sync logic to fit your specific workflow!
+Feel free to fork and enhance our design! If you find a bug in our PiP logic or have a new alarm sound to suggest, PRs are welcome.
+
+*Built with ❤️ for productivity.*
