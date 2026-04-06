@@ -1,5 +1,26 @@
+# Dependencies
 node_modules/
 dist/
-test-results/
+.npm/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# IDEs & OS
+.vscode/
+.idea/
 .DS_Store
 *.local
+
+# Tools
+.gitnexus
+test-results/
+playwright-report/
+.screenshot_check/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
