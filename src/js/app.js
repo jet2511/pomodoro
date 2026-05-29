@@ -8,7 +8,7 @@ import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
 import { initPiP, togglePiP, updatePipTask } from './modules/pip.js';
-import { isUserTyping, debounce } from './modules/utils.js';
+import { isUserTyping, debounce, trapFocus } from './modules/utils.js';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
@@ -91,13 +91,22 @@ document.addEventListener('keydown', (e) => {
     // Check if user is typing in an input or textarea
     const typing = isUserTyping(e);
 
-    if (e.key === 'Escape') {
-        if (!elements.settingsModal.classList.contains('hidden')) toggleSettingsModal(false);
-        if (!elements.authModal.classList.contains('hidden')) toggleAuthModal(false);
+    const isSettingsOpen = !elements.settingsModal.classList.contains('hidden');
+    const isAuthOpen = !elements.authModal.classList.contains('hidden');
+
+    if (isSettingsOpen) {
+        trapFocus(e, elements.settingsModal);
+    } else if (isAuthOpen) {
+        trapFocus(e, elements.authModal);
     }
 
-    // Keyboard Shortcuts (only if not typing)
-    if (!typing) {
+    if (e.key === 'Escape') {
+        if (isSettingsOpen) toggleSettingsModal(false);
+        if (isAuthOpen) toggleAuthModal(false);
+    }
+
+    // Keyboard Shortcuts (only if not typing and no modifier keys and no modal open)
+    if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen) {
         if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             toggleTimer();

@@ -33,3 +33,31 @@ export function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+
+/**
+ * Traps focus inside a modal element
+ * @param {Event} e - Keyboard event
+ * @param {HTMLElement} modalElement - The modal wrapper
+ */
+export function trapFocus(e, modalElement) {
+    if (e.key !== 'Tab') return;
+    
+    const focusableElements = modalElement.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+            lastElement.focus();
+            e.preventDefault();
+        }
+    } else {
+        if (document.activeElement === lastElement) {
+            firstElement.focus();
+            e.preventDefault();
+        }
+    }
+}

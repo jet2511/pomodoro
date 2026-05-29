@@ -21,6 +21,7 @@ export async function syncDataToCloud(user) {
         await setDoc(userRef, {
             tasks: state.tasks,
             settings: state.settings,
+            focusHistory: state.focusHistory,
             lastSynced: serverTimestamp()
         }, { merge: true });
         syncEvents.onSyncStatusChange('synced');
@@ -58,9 +59,22 @@ export async function loadDataFromCloud(user) {
                 }
             }
             
-            // For tasks, we overwrite local state with cloud state completely
+            // For tasks, we merge local and cloud state
             if (data.tasks) {
-                state.tasks = data.tasks;
+                const localTasks = state.tasks;
+                const cloudTasks = data.tasks;
+                
+                // Keep all cloud tasks, and add any local tasks that aren't in the cloud
+                const mergedTasks = [...cloudTasks];
+                const cloudTaskIds = new Set(cloudTasks.map(t => t.id));
+                
+                localTasks.forEach(t => {
+                    if (!cloudTaskIds.has(t.id)) {
+                        mergedTasks.push(t);
+                    }
+                });
+                
+                state.tasks = mergedTasks;
                 
                 // Re-establish active task id references
                 const active = state.tasks.find(t => t.isActive);
@@ -73,6 +87,11 @@ export async function loadDataFromCloud(user) {
                 // Save locally too
                 saveTasks();
                 renderTasks();
+            }
+            
+            // Sync focusHistory
+            if (data.focusHistory) {
+                state.focusHistory = data.focusHistory;
             }
         } else {
             // First time login for this user, push local data up

@@ -40,7 +40,9 @@ export function loadSettings() {
             const data = JSON.parse(saved);
             state.settings = { ...state.settings, ...(data.settings || data) };
             state.focusHistory = data.focusHistory || {};
-        } catch (e) { }
+        } catch (e) {
+            console.error("Failed to parse pomodoro_settings from localStorage", e);
+        }
     }
 }
 

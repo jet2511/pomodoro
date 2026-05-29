@@ -2,6 +2,9 @@ import { state, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { toggleBackgroundSound, playAlarm } from './audio.js';
 
+let sessionStartTime = null;
+let sessionAccumulatedMs = 0;
+let targetEndTime = null;
 export const timerEvents = {
     onPomodoroComplete: () => { }
 };
@@ -71,6 +74,9 @@ export function setMode(mode) {
         stopTimer(false);
     }
 
+    sessionAccumulatedMs = 0;
+    sessionStartTime = null;
+
     state.mode = mode;
     state.timeRemaining = state.settings[mode] * 60;
 
@@ -104,30 +110,46 @@ function startTimer() {
         Notification.requestPermission();
     }
 
-    let expected = Date.now() + 1000;
+    sessionStartTime = Date.now();
+    targetEndTime = sessionStartTime + (state.timeRemaining * 1000);
+
     state.timerId = setInterval(() => {
-        const now = Date.now();
-        const drift = now - expected;
+        const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
         
-        // If drift is too large (e.g. tab was suspended), we might want to catch up
-        // or just decrement based on actual time elapsed.
-        // For simplicity, we'll just handle the single tick and adjust next expected.
-        
-        if (state.timeRemaining > 0) {
-            state.timeRemaining--;
+        if (state.timeRemaining !== remaining) {
+            state.timeRemaining = remaining;
             updateDisplay();
-            expected += 1000;
-        } else {
+        }
+        
+        if (state.timeRemaining <= 0) {
             handleTimerComplete();
         }
-    }, 1000);
+    }, 200); // Update frequently for accuracy
 }
+
+// Ensure timer UI updates immediately when returning to the tab
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.isRunning && targetEndTime) {
+        const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
+        state.timeRemaining = remaining;
+        updateDisplay();
+        if (state.timeRemaining <= 0) {
+            handleTimerComplete();
+        }
+    }
+});
 
 function stopTimer(completed = false) {
     if (state.timerId) {
         clearInterval(state.timerId);
         state.timerId = null;
     }
+    
+    if (sessionStartTime) {
+        sessionAccumulatedMs += (Date.now() - sessionStartTime);
+        sessionStartTime = null;
+    }
+
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
     toggleBackgroundSound(false);
@@ -169,7 +191,10 @@ function handleTimerComplete() {
             state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
         }
         state.focusHistory[today].pomodoros++;
-        state.focusHistory[today].seconds += state.settings.pomodoro * 60;
+        
+        const elapsedSeconds = Math.round(sessionAccumulatedMs / 1000);
+        state.focusHistory[today].seconds += elapsedSeconds;
+        sessionAccumulatedMs = 0;
 
         notifyStateChange();
 
