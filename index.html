@@ -35,16 +35,16 @@
             </div>
         </header>
 
-        <main>
-            <section class="timer-section glass-panel">
-                <div class="mode-selector">
-                    <button class="mode-btn active" data-mode="pomodoro">Pomodoro</button>
-                    <button class="mode-btn" data-mode="shortBreak">Short Break</button>
-                    <button class="mode-btn" data-mode="longBreak">Long Break</button>
+        <main id="main-content" role="main">
+            <section class="timer-section glass-panel" aria-label="Timer">
+                <div class="mode-selector" role="group" aria-label="Timer modes">
+                    <button class="mode-btn active" data-mode="pomodoro" aria-pressed="true">Pomodoro</button>
+                    <button class="mode-btn" data-mode="shortBreak" aria-pressed="false">Short Break</button>
+                    <button class="mode-btn" data-mode="longBreak" aria-pressed="false">Long Break</button>
                 </div>
 
-                <div class="timer-display">
-                    <svg class="progress-ring" width="250" height="250">
+                <div class="timer-display" role="timer" aria-live="polite">
+                    <svg class="progress-ring" width="250" height="250" aria-hidden="true">
                         <circle class="progress-ring__circle-bg" stroke="rgba(255, 255, 255, 0.1)" stroke-width="8"
                             fill="transparent" r="115" cx="125" cy="125" />
                         <circle class="progress-ring__circle" stroke="white" stroke-width="8" fill="transparent" r="115"
@@ -54,15 +54,15 @@
                 </div>
 
                 <div class="controls">
-                    <button id="main-btn" class="control-btn primary">Start</button>
-                    <button id="skip-btn" class="control-btn secondary" title="Skip to next phase"><i
+                    <button id="main-btn" class="control-btn primary" aria-label="Start Timer">Start</button>
+                    <button id="skip-btn" class="control-btn secondary" title="Skip to next phase" aria-label="Skip to next phase"><i
                             class="fa-solid fa-forward-step"></i></button>
                 </div>
-                <div id="pip-current-task" class="pip-only"></div>
-                <div class="status-text" id="status-text">Ready to focus?</div>
+                <div id="pip-current-task" class="pip-only" aria-live="polite"></div>
+                <div class="status-text" id="status-text" aria-live="polite">Ready to focus?</div>
             </section>
 
-            <section class="stats-section glass-panel">
+            <section class="stats-section glass-panel" aria-label="Statistics">
                 <div class="stats-grid">
                     <div class="stat-item">
                         <span class="stat-value" id="stat-total-pomodoros">0</span>
@@ -109,10 +109,10 @@
     <audio id="rain-sound" src="https://assets.mixkit.co/active_storage/sfx/2827/2827-preview.mp3" loop></audio>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="modal hidden">
+    <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="modal-content glass-panel">
             <div class="modal-header">
-                <h2>Settings</h2>
+                <h2 id="settings-title">Settings</h2>
                 <button id="close-settings-btn" class="icon-btn" aria-label="Close settings"><i
                         class="fa-solid fa-xmark"></i></button>
             </div>
@@ -207,10 +207,10 @@
     </div>
 
     <!-- Auth Modal -->
-    <div id="auth-modal" class="modal hidden">
+    <div id="auth-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <div class="modal-content glass-panel" style="max-width: 350px;">
             <div class="modal-header">
-                <h2>Account & Sync</h2>
+                <h2 id="auth-title">Account & Sync</h2>
                 <button id="close-auth-btn" class="icon-btn" aria-label="Close auth"><i
                         class="fa-solid fa-xmark"></i></button>
             </div>

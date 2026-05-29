@@ -25,10 +25,11 @@ export function saveTasks() {
 
 export function addTask(title, estPomodoros) {
     const isFirstTask = state.tasks.length === 0;
+    const taskId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
     const newTask = {
-        id: Date.now().toString(),
+        id: taskId,
         title,
-        estPomodoros: parseInt(estPomodoros),
+        estPomodoros: Math.min(100, Math.max(1, parseInt(estPomodoros) || 1)),
         actualPomodoros: 0,
         isCompleted: false,
         isActive: isFirstTask
@@ -100,12 +101,17 @@ export function renderTasks() {
         const item = document.createElement('div');
         item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
 
+        // Sanitize task title to prevent XSS
+        const tempDiv = document.createElement('div');
+        tempDiv.textContent = task.title;
+        const sanitizedTitle = tempDiv.innerHTML;
+
         item.innerHTML = `
             <div class="task-check" data-action="toggle" data-id="${task.id}" title="Toggle completion">
                 <i class="fa-solid fa-check"></i>
             </div>
             <div class="task-content" data-action="activate" data-id="${task.id}" draggable="true">
-                <div class="task-text">${task.title}</div>
+                <div class="task-text">${sanitizedTitle}</div>
                 <div class="task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
             </div>
             <div class="task-actions">

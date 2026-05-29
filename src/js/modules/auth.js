@@ -1,6 +1,7 @@
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
 import { loadDataFromCloud, syncEvents } from './sync.js';
+import { onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
 
 let currentUser = null;
 
@@ -135,9 +136,12 @@ async function handleEmailAuth(e, action) {
         }
         toggleAuthModal(false);
     } catch (error) {
-        let cleanMsg = error.message;
-        if(error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";
-        if(error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') cleanMsg = "Invalid email or password.";
+        let cleanMsg = "An error occurred. Please try again.";
+        if (error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";
+        else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') cleanMsg = "Invalid email or password.";
+        else if (error.code === 'auth/too-many-requests') cleanMsg = "Too many attempts. Please try again later.";
+        else if (error.code === 'auth/weak-password') cleanMsg = "Password is too weak. Must be at least 6 characters.";
+        else if (error.code === 'auth/invalid-email') cleanMsg = "Invalid email format.";
         showError(cleanMsg);
     }
 }

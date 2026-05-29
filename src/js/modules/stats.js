@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { elements } from './elements.js';
 
 export function updateStatsUI() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     const todayData = state.focusHistory[today] || { seconds: 0, pomodoros: 0 };
 
     // Calculate total pomodoros across all history

@@ -16,6 +16,7 @@ export function toggleBackgroundSound(play) {
     if (play && state.settings.tickingSound !== 'none') {
         const sound = elements.sounds[state.settings.tickingSound];
         if (sound) {
+            sound.loop = true;
             sound.play().catch(e => console.log('Audio blocked', e));
         }
     }

@@ -131,4 +131,19 @@ h1 {
     cursor: pointer;
     transition: var(--transition-smooth);
 }
+
+.action-btn:focus-visible, .icon-btn:focus-visible, .header-btn:focus-visible, .control-btn:focus-visible, .mode-btn:focus-visible, .add-btn:focus-visible {
+    outline: 2px solid var(--clr-text);
+    outline-offset: 2px;
+}
+
+:root[data-theme="light"] .action-btn:focus-visible, 
+:root[data-theme="light"] .icon-btn:focus-visible, 
+:root[data-theme="light"] .header-btn:focus-visible, 
+:root[data-theme="light"] .control-btn:focus-visible, 
+:root[data-theme="light"] .mode-btn:focus-visible, 
+:root[data-theme="light"] .add-btn:focus-visible {
+    outline-color: #333;
+}
+
 :root[data-theme="light"] .icon-btn { color: #333; }

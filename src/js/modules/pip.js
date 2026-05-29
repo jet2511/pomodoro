@@ -150,6 +150,7 @@ export async function togglePiP() {
                 console.log('PiP: Success');
 
             } catch (innerErr) {
+                clearInterval(snapInterval);
                 console.error('PiP Injection Error:', innerErr);
             }
         });
