@@ -18,8 +18,8 @@
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <script type="module" crossorigin src="/pomodoro/assets/index-BdcFCu7f.js"></script>
-  <link rel="stylesheet" crossorigin href="/pomodoro/assets/index-DlcmWHtL.css">
+  <script type="module" crossorigin src="/pomodoro/assets/index-BKu3xSdD.js"></script>
+  <link rel="stylesheet" crossorigin href="/pomodoro/assets/index-CCVaGWsK.css">
 <link rel="manifest" href="/pomodoro/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/pomodoro/registerSW.js"></script></head>
 
 <body class="mode-pomodoro">
@@ -52,6 +52,7 @@
                             cx="125" cy="125" />
                     </svg>
                     <div class="time" id="time-display">25:00</div>
+                    <div id="current-task-display" class="current-task-display" aria-live="polite"></div>
                 </div>
 
                 <div class="controls">
@@ -59,7 +60,6 @@
                     <button id="skip-btn" class="control-btn secondary" title="Skip to next phase" aria-label="Skip to next phase"><i
                             class="fa-solid fa-forward-step"></i></button>
                 </div>
-                <div id="pip-current-task" class="pip-only" aria-live="polite"></div>
                 <div class="status-text" id="status-text" aria-live="polite">Ready to focus?</div>
             </section>
 
