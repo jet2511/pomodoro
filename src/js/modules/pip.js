@@ -149,6 +149,7 @@ export async function togglePiP() {
                     }
 
                     if (timerParent && adoptedSection) {
+                        document.adoptNode(adoptedSection);
                         if (nextSibling) timerParent.insertBefore(adoptedSection, nextSibling);
                         else timerParent.appendChild(adoptedSection);
                     }
