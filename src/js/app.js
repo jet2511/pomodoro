@@ -1,13 +1,13 @@
 import { elements } from './modules/elements.js';
 import { loadSettings, stateEvents } from './modules/state.js';
 import { setMode, toggleTimer, skipPhase, timerEvents } from './modules/timer.js';
-import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, updateTaskPomodoros, taskEvents } from './modules/tasks.js';
+import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, updateTaskPomodoros, taskEvents, getFirstIncompleteTask } from './modules/tasks.js';
 import { toggleSettingsModal, saveSettings, applyTheme } from './modules/settings.js';
 import { updateVolume } from './modules/audio.js';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
-import { initPiP, togglePiP, updatePipTask } from './modules/pip.js';
+import { initPiP, togglePiP, updateActiveTaskDisplay } from './modules/pip.js';
 import { isUserTyping, debounce, trapFocus } from './modules/utils.js';
 
 // Setup Event Bridges
@@ -16,9 +16,25 @@ timerEvents.onPomodoroComplete = () => {
     updateStatsUI();
 };
 
+timerEvents.onPomodoroStart = () => {
+    const task = getFirstIncompleteTask();
+    
+    if (task) {
+        const wantsToSelect = confirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
+        if (wantsToSelect) {
+            setActiveTask(task.id);
+        }
+        return true; 
+    } else {
+        elements.form.classList.add('pulse-warning');
+        setTimeout(() => elements.form.classList.remove('pulse-warning'), 1000);
+        return true; 
+    }
+};
+
 taskEvents.onTaskActivated = () => {
     setMode('pomodoro');
-    updatePipTask();
+    updateActiveTaskDisplay();
 };
 
 // ... Timer Event Listeners ...
@@ -43,7 +59,7 @@ elements.form.addEventListener('submit', (e) => {
         elements.taskInput.value = '';
         elements.estPomodorosInput.value = '1';
         elements.taskInput.focus();
-        updatePipTask();
+        updateActiveTaskDisplay();
     }
 });
 
@@ -51,21 +67,21 @@ elements.taskList.addEventListener('click', (e) => {
     const checkBtn = e.target.closest('[data-action="toggle"]');
     if (checkBtn) {
         toggleTaskComplete(checkBtn.dataset.id);
-        updatePipTask();
+        updateActiveTaskDisplay();
         return;
     }
 
     const contentBtn = e.target.closest('[data-action="activate"]');
     if (contentBtn) {
         setActiveTask(contentBtn.dataset.id);
-        updatePipTask();
+        updateActiveTaskDisplay();
         return;
     }
 
     const deleteBtn = e.target.closest('[data-action="delete"]');
     if (deleteBtn) {
         deleteTask(deleteBtn.dataset.id);
-        updatePipTask();
+        updateActiveTaskDisplay();
         return;
     }
 });

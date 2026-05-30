@@ -48,7 +48,7 @@ export async function togglePiP() {
                 pipWindow.document.body.classList.add('pip-body');
 
                 // Move task label inside the circular timer
-                const pipTaskEl = adoptedSection.querySelector('#pip-current-task');
+                const pipTaskEl = adoptedSection.querySelector('#current-task-display');
                 const timerDisplay = adoptedSection.querySelector('.timer-display');
                 const svgElement = adoptedSection.querySelector('.progress-ring');
                 
@@ -59,9 +59,8 @@ export async function togglePiP() {
                 const originalTaskParent = pipTaskEl ? taskLabelInitialParent(pipTaskEl) : null;
                 const originalTaskSibling = pipTaskEl ? pipTaskEl.nextSibling : null;
                 
-                if (pipTaskEl && timerDisplay) {
-                    timerDisplay.appendChild(pipTaskEl);
-                }
+                // We no longer move the task display inside the timer.
+                // It remains below the controls (which are hidden), so it sits under the timer.
 
                 // Create the hover overlay using PiP document context
                 const overlay = pipWindow.document.createElement('div');
@@ -99,13 +98,13 @@ export async function togglePiP() {
                         labelEl.textContent = state.isRunning ? 'Stop' : 'Resume';
                     }
                     
-                    updatePipTask();
+                    updateActiveTaskDisplay();
                 };
 
                 const observer = new MutationObserver(updateUI);
                 observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-                const taskObserver = new MutationObserver(updatePipTask);
+                const taskObserver = new MutationObserver(updateActiveTaskDisplay);
                 const taskList = document.getElementById('task-list');
                 if (taskList) taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
 
@@ -239,15 +238,14 @@ function copyStyles(targetWindow) {
         
         .timer-display {
             position: relative !important; 
-            width: min(90vmin, 250px) !important; 
-            height: min(90vmin, 250px) !important;
+            width: 90vmin !important; 
+            height: 90vmin !important;
             display: flex !important; 
             flex-direction: column !important;
             justify-content: center !important; 
             align-items: center !important;
-            border-radius: 50% !important;
-            background: rgba(255,255,255,0.08) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
+            background: transparent !important;
+            border: none !important;
             margin: 0 !important;
         }
         
@@ -279,17 +277,13 @@ function copyStyles(targetWindow) {
             letter-spacing: -1.5px !important;
         }
         
-        #pip-current-task {
-            font-size: min(4.5vmin, 0.9rem) !important; 
-            font-weight: 500 !important;
-            text-align: center !important; 
+        #current-task-display {
+            font-size: min(4.5vmin, 0.85rem) !important; 
             max-width: 85% !important;
-            white-space: nowrap !important; 
-            overflow: hidden !important; 
-            text-overflow: ellipsis !important;
-            color: rgba(255, 255, 255, 0.75) !important;
-            margin: 0 !important;
-            z-index: 10 !important;
+            margin-top: min(1.5vmin, 5px) !important;
+            display: none !important;
+        }
+        #current-task-display.has-task {
             display: block !important;
         }
 
@@ -302,12 +296,14 @@ function copyStyles(targetWindow) {
             background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 30%, transparent 100%) !important;
             display: flex !important; 
             flex-direction: row !important;
+            flex-wrap: wrap !important;
             justify-content: center !important; 
             align-items: flex-end !important;
             gap: min(8vmin, 20px) !important;
             padding-bottom: min(10vmin, 24px) !important;
             z-index: 1000 !important;
             transition: opacity 0.2s ease !important;
+            min-width: 0 !important;
         }
         .pip-overlay.hidden { opacity: 0 !important; pointer-events: none !important; }
         
@@ -330,16 +326,46 @@ function copyStyles(targetWindow) {
             letter-spacing: 1.5px !important;
             font-size: min(3vmin, 0.65rem) !important;
         }
+
+        /* Responsive Layout for Short Windows */
+        @media (max-height: 160px) {
+            .progress-ring {
+                display: none !important;
+            }
+            .timer-display {
+                width: 100vw !important;
+                height: 100vh !important;
+            }
+            .time {
+                font-size: min(40vh, 4rem) !important;
+                margin-top: 0 !important;
+            }
+            #current-task-display {
+                font-size: min(15vh, 1.2rem) !important;
+                margin-top: 5px !important;
+            }
+        }
     `;
     targetDoc.head.appendChild(pipStyle);
 }
 
-export function updatePipTask() {
-    if (!pipWindow || pipWindow.closed) return;
-    const taskEl = pipWindow.document.getElementById('pip-current-task');
+export function updateActiveTaskDisplay() {
+    let taskEl = null;
+    if (pipWindow && !pipWindow.closed) {
+        taskEl = pipWindow.document.getElementById('current-task-display');
+    }
+    if (!taskEl) {
+        taskEl = document.getElementById('current-task-display');
+    }
+    
     if (taskEl) {
         const activeTask = document.querySelector('.task-item.active .task-text');
-        taskEl.textContent = activeTask ? activeTask.textContent : 'Ready to Focus';
-        taskEl.style.display = 'block';
+        if (activeTask) {
+            taskEl.textContent = activeTask.textContent;
+            taskEl.classList.add('has-task');
+        } else {
+            taskEl.textContent = '';
+            taskEl.classList.remove('has-task');
+        }
     }
 }

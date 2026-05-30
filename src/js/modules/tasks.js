@@ -5,6 +5,10 @@ export const taskEvents = {
     onTaskActivated: () => { }
 };
 
+export function getFirstIncompleteTask() {
+    return state.tasks.find(t => !t.isCompleted) || null;
+}
+
 export function loadTasks() {
     const saved = localStorage.getItem('pomodoro_tasks');
     if (saved) {

@@ -6,7 +6,8 @@ let sessionStartTime = null;
 let sessionAccumulatedMs = 0;
 let targetEndTime = null;
 export const timerEvents = {
-    onPomodoroComplete: () => { }
+    onPomodoroComplete: () => { },
+    onPomodoroStart: null // returns true if start should proceed
 };
 
 // Progress Circle setup
@@ -100,6 +101,13 @@ function updateStatusText() {
 }
 
 function startTimer() {
+    if (state.mode === 'pomodoro' && !state.activeTaskId) {
+        if (timerEvents.onPomodoroStart) {
+            const shouldContinue = timerEvents.onPomodoroStart();
+            if (!shouldContinue) return; // Start aborted
+        }
+    }
+
     state.isRunning = true;
     elements.mainBtn.textContent = 'Pause';
     
