@@ -146,10 +146,41 @@ body.mode-longBreak .control-btn.primary { color: var(--clr-bg-long); }
     transform: scale(1.05);
 }
 
+
+
 .status-text {
     font-size: 0.9rem;
     color: var(--clr-text-muted);
     font-weight: 500;
+}
+
+.current-task-display {
+    margin-top: 0.2rem;
+    margin-bottom: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.15);
+    padding: 0.2rem 0.8rem;
+    border-radius: 20px;
+    max-width: 75%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: none;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.current-task-display.has-task {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 380px) {

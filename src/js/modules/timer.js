@@ -6,7 +6,8 @@ let sessionStartTime = null;
 let sessionAccumulatedMs = 0;
 let targetEndTime = null;
 export const timerEvents = {
-    onPomodoroComplete: () => { }
+    onPomodoroComplete: () => { },
+    onPomodoroStart: null // returns true if start should proceed
 };
 
 // Progress Circle setup
@@ -83,7 +84,9 @@ export function setMode(mode) {
     elements.body.className = `mode-${mode}`;
 
     elements.modeBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
+        const isActive = btn.dataset.mode === mode;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive.toString());
     });
 
     updateDisplay();
@@ -100,8 +103,16 @@ function updateStatusText() {
 }
 
 function startTimer() {
+    if (state.mode === 'pomodoro' && !state.activeTaskId) {
+        if (timerEvents.onPomodoroStart) {
+            const shouldContinue = timerEvents.onPomodoroStart();
+            if (!shouldContinue) return; // Start aborted
+        }
+    }
+
     state.isRunning = true;
     elements.mainBtn.textContent = 'Pause';
+    elements.mainBtn.setAttribute('aria-label', 'Pause Timer');
     
     // Add classes for animations
     elements.timeDisplay.parentElement.classList.add('is-running');
@@ -157,6 +168,7 @@ function stopTimer(completed = false) {
 
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
+    elements.mainBtn.setAttribute('aria-label', 'Start Timer');
     
     // Remove classes for animations
     elements.timeDisplay.parentElement.classList.remove('is-running');
@@ -179,7 +191,7 @@ export function toggleTimer() {
 
 export function skipPhase() {
     stopTimer(true);
-    handleTimerComplete();
+    handleTimerComplete(true);
 }
 
 function showNotification(title, body) {
@@ -188,34 +200,36 @@ function showNotification(title, body) {
     }
 }
 
-function handleTimerComplete() {
+function handleTimerComplete(isSkipped = false) {
     stopTimer(true);
-    playAlarm();
+    if (!isSkipped) playAlarm();
 
     if (state.mode === 'pomodoro') {
-        state.pomodorosCompleted++;
+        if (!isSkipped) {
+            state.pomodorosCompleted++;
 
-        // Record Analytics
-        const today = new Date().toISOString().split('T')[0];
-        if (!state.focusHistory[today]) {
-            state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
+            // Record Analytics
+            const today = new Date().toISOString().split('T')[0];
+            if (!state.focusHistory[today]) {
+                state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
+            }
+            state.focusHistory[today].pomodoros++;
+            
+            const elapsedSeconds = Math.round(sessionAccumulatedMs / 1000);
+            state.focusHistory[today].seconds += elapsedSeconds;
+            sessionAccumulatedMs = 0;
+
+            notifyStateChange();
+
+            // Notify tasks module via app.js
+            timerEvents.onPomodoroComplete();
         }
-        state.focusHistory[today].pomodoros++;
-        
-        const elapsedSeconds = Math.round(sessionAccumulatedMs / 1000);
-        state.focusHistory[today].seconds += elapsedSeconds;
-        sessionAccumulatedMs = 0;
 
-        notifyStateChange();
-
-        // Notify tasks module via app.js
-        timerEvents.onPomodoroComplete();
-
-        if (state.pomodorosCompleted % state.settings.longBreakInterval === 0) {
-            showNotification('Pomodoro Completed!', 'Time for a long break.');
+        if (state.pomodorosCompleted > 0 && state.pomodorosCompleted % state.settings.longBreakInterval === 0) {
+            if (!isSkipped) showNotification('Pomodoro Completed!', 'Time for a long break.');
             setMode('longBreak');
         } else {
-            showNotification('Pomodoro Completed!', 'Time for a short break.');
+            if (!isSkipped) showNotification('Pomodoro Completed!', 'Time for a short break.');
             setMode('shortBreak');
         }
 
@@ -224,7 +238,7 @@ function handleTimerComplete() {
         }
 
     } else {
-        showNotification('Break is over!', 'Time to focus.');
+        if (!isSkipped) showNotification('Break is over!', 'Time to focus.');
         setMode('pomodoro');
 
         if (state.settings.autoStartPomodoros) {
