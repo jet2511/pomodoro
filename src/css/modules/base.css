@@ -7,9 +7,9 @@
     --clr-text: #ffffff;
     --clr-text-muted: rgba(255, 255, 255, 0.7);
     
-    --glass-bg: rgba(255, 255, 255, 0.15);
-    --glass-border: rgba(255, 255, 255, 0.2);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.22);
+    --glass-border: rgba(255, 255, 255, 0.3);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
     
     --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
@@ -121,7 +121,7 @@ h1 {
     box-shadow: var(--glass-shadow);
     border-radius: 20px;
     padding: 1.5rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 /* Inputs / Buttons reset */
@@ -147,3 +147,13 @@ h1 {
 }
 
 :root[data-theme="light"] .icon-btn { color: #333; }
+
+/* Footer */
+.app-footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    color: var(--clr-text-muted);
+    font-size: 0.75rem;
+    opacity: 0.6;
+}

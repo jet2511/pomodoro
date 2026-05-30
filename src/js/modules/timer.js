@@ -102,6 +102,11 @@ function updateStatusText() {
 function startTimer() {
     state.isRunning = true;
     elements.mainBtn.textContent = 'Pause';
+    
+    // Add classes for animations
+    elements.timeDisplay.parentElement.classList.add('is-running');
+    elements.timeDisplay.closest('.timer-section').classList.add('running');
+    
     updateStatusText();
 
     toggleBackgroundSound(true);
@@ -152,6 +157,11 @@ function stopTimer(completed = false) {
 
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
+    
+    // Remove classes for animations
+    elements.timeDisplay.parentElement.classList.remove('is-running');
+    elements.timeDisplay.closest('.timer-section').classList.remove('running');
+    
     toggleBackgroundSound(false);
 
     if (!completed) {

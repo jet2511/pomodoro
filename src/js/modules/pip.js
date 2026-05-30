@@ -32,22 +32,6 @@ export async function togglePiP() {
             height: 240,
         });
 
-        // Enforce non-resizable behavior (Strict Vertical Lock)
-        const snapSize = () => {
-            if (pipWindow && !pipWindow.closed) {
-                const targetH = 240;
-                // If browser forces a larger width (e.g. 300px), we adapt to it to prevent flickering, 
-                // but we strictly lock the height.
-                if (pipWindow.innerHeight !== targetH) {
-                    pipWindow.resizeTo(pipWindow.innerWidth, targetH);
-                }
-            }
-        };
-        pipWindow.addEventListener('resize', snapSize);
-        
-        // High-frequency check to ensure the window stays locked vertically
-        const snapInterval = setInterval(snapSize, 50);
-
         console.log('PiP: Copying styles...');
         copyStyles(pipWindow);
 
@@ -66,6 +50,11 @@ export async function togglePiP() {
                 // Move task label inside the circular timer
                 const pipTaskEl = adoptedSection.querySelector('#pip-current-task');
                 const timerDisplay = adoptedSection.querySelector('.timer-display');
+                const svgElement = adoptedSection.querySelector('.progress-ring');
+                
+                if (svgElement && !svgElement.getAttribute('viewBox')) {
+                    svgElement.setAttribute('viewBox', '0 0 250 250');
+                }
                 
                 const originalTaskParent = pipTaskEl ? taskLabelInitialParent(pipTaskEl) : null;
                 const originalTaskSibling = pipTaskEl ? pipTaskEl.nextSibling : null;
@@ -79,9 +68,13 @@ export async function togglePiP() {
                 overlay.id = 'pip-overlay';
                 overlay.className = 'pip-overlay hidden';
                 overlay.innerHTML = `
-                    <div class="pip-control-icon">
+                    <div class="pip-control-icon play-pause-btn">
                         <i class="fa-solid ${state.isRunning ? 'fa-pause' : 'fa-play'}"></i>
                         <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
+                    </div>
+                    <div class="pip-control-icon skip-btn">
+                        <i class="fa-solid fa-forward-step"></i>
+                        <span class="pip-control-label">Skip</span>
                     </div>
                 `;
                 pipWindow.document.body.appendChild(overlay);
@@ -91,8 +84,16 @@ export async function togglePiP() {
                     const currentMode = document.body.className.split(' ').find(c => c.startsWith('mode-')) || 'mode-pomodoro';
                     pipWindow.document.body.className = `pip-body ${currentMode}`;
                     
-                    const iconEl = overlay.querySelector('i');
-                    const labelEl = overlay.querySelector('.pip-control-label');
+                    if (timerDisplay) {
+                        if (state.isRunning) {
+                            timerDisplay.classList.add('is-running');
+                        } else {
+                            timerDisplay.classList.remove('is-running');
+                        }
+                    }
+                    
+                    const iconEl = overlay.querySelector('.play-pause-btn i');
+                    const labelEl = overlay.querySelector('.play-pause-btn .pip-control-label');
                     if (iconEl && labelEl) {
                         iconEl.className = `fa-solid ${state.isRunning ? 'fa-pause' : 'fa-play'}`;
                         labelEl.textContent = state.isRunning ? 'Stop' : 'Resume';
@@ -111,11 +112,20 @@ export async function togglePiP() {
                 pipWindow.document.body.addEventListener('mouseenter', () => overlay.classList.remove('hidden'));
                 pipWindow.document.body.addEventListener('mouseleave', () => overlay.classList.add('hidden'));
                 
-                overlay.addEventListener('click', async (e) => {
+                const playPauseBtn = overlay.querySelector('.play-pause-btn');
+                const skipBtn = overlay.querySelector('.skip-btn');
+                
+                playPauseBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const { toggleTimer } = await import('./timer.js');
                     toggleTimer();
                     updateUI();
+                });
+
+                skipBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const { skipPhase } = await import('./timer.js');
+                    skipPhase();
                 });
 
                 pipWindow.document.addEventListener('keydown', (e) => {
@@ -132,7 +142,6 @@ export async function togglePiP() {
                 pipWindow.addEventListener('pagehide', () => {
                     console.log('PiP: Closing and restoring...');
                     pipWindow = null;
-                    clearInterval(snapInterval);
                     observer.disconnect();
                     taskObserver.disconnect();
                     
@@ -150,7 +159,6 @@ export async function togglePiP() {
                 console.log('PiP: Success');
 
             } catch (innerErr) {
-                clearInterval(snapInterval);
                 console.error('PiP Injection Error:', innerErr);
             }
         });
@@ -231,8 +239,8 @@ function copyStyles(targetWindow) {
         
         .timer-display {
             position: relative !important; 
-            width: 224px !important; 
-            height: 224px !important;
+            width: min(90vmin, 250px) !important; 
+            height: min(90vmin, 250px) !important;
             display: flex !important; 
             flex-direction: column !important;
             justify-content: center !important; 
@@ -243,23 +251,26 @@ function copyStyles(targetWindow) {
             margin: 0 !important;
         }
         
+        .timer-display.is-running .progress-ring__circle {
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.4)) !important;
+        }
+        
         .progress-ring {
             position: absolute !important; 
             top: 50% !important; 
             left: 50% !important;
             transform: translate(-50%, -50%) rotate(-90deg) !important; 
-            width: 224px !important; 
-            height: 224px !important;
+            width: 100% !important; 
+            height: 100% !important;
             pointer-events: none !important;
         }
         
         .progress-ring__circle, .progress-ring__circle-bg {
-            r: 104 !important; cx: 112 !important; cy: 112 !important;
-            stroke-width: 5 !important;
+            stroke-width: 12 !important;
         }
         
         .time { 
-            font-size: 4rem !important; 
+            font-size: min(18vmin, 4.5rem) !important; 
             font-weight: 700 !important; 
             line-height: 1 !important;
             margin: 0 !important;
@@ -269,7 +280,7 @@ function copyStyles(targetWindow) {
         }
         
         #pip-current-task {
-            font-size: 0.8rem !important; 
+            font-size: min(4.5vmin, 0.9rem) !important; 
             font-weight: 500 !important;
             text-align: center !important; 
             max-width: 85% !important;
@@ -288,12 +299,13 @@ function copyStyles(targetWindow) {
             left: 0 !important;
             width: 100% !important; 
             height: 100% !important;
-            background: rgba(0,0,0,0.5) !important;
-            backdrop-filter: blur(2px) !important;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 30%, transparent 100%) !important;
             display: flex !important; 
+            flex-direction: row !important;
             justify-content: center !important; 
-            align-items: center !important;
-            cursor: pointer !important; 
+            align-items: flex-end !important;
+            gap: min(8vmin, 20px) !important;
+            padding-bottom: min(10vmin, 24px) !important;
             z-index: 1000 !important;
             transition: opacity 0.2s ease !important;
         }
@@ -303,15 +315,20 @@ function copyStyles(targetWindow) {
             display: flex !important; 
             flex-direction: column !important;
             align-items: center !important; 
-            gap: 6px !important;
-            pointer-events: none !important;
+            gap: min(3vmin, 8px) !important;
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            transition: transform 0.2s ease !important;
         }
-        .pip-control-icon i { font-size: 2.8rem !important; color: white !important; }
+        .pip-control-icon:hover {
+            transform: scale(1.1) !important;
+        }
+        .pip-control-icon i { font-size: min(12vmin, 2.8rem) !important; color: white !important; }
         .pip-control-icon span { 
             font-weight: 600 !important; 
             text-transform: uppercase !important; 
             letter-spacing: 1.5px !important;
-            font-size: 0.65rem !important;
+            font-size: min(3vmin, 0.65rem) !important;
         }
     `;
     targetDoc.head.appendChild(pipStyle);
