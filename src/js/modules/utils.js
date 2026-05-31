@@ -61,3 +61,38 @@ export function trapFocus(e, modalElement) {
         }
     }
 }
+
+/**
+ * Custom confirm modal
+ * @param {string} message - Message to display
+ * @returns {Promise<boolean>}
+ */
+export function customConfirm(message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirm-modal');
+        const msgEl = document.getElementById('confirm-message');
+        const okBtn = document.getElementById('confirm-ok-btn');
+        const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+        if (!modal) {
+            // Fallback if modal not in DOM
+            resolve(window.confirm(message));
+            return;
+        }
+
+        msgEl.textContent = message;
+        modal.classList.remove('hidden');
+
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+        };
+
+        const onOk = () => { cleanup(); resolve(true); };
+        const onCancel = () => { cleanup(); resolve(false); };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+    });
+}

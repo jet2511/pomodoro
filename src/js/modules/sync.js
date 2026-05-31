@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+
 import { getDbRef } from './firebase.js';
 import { state } from './state.js';
 import { saveTasks, renderTasks } from './tasks.js';
@@ -10,13 +10,22 @@ export const syncEvents = {
     onSyncStatusChange: () => { }
 };
 
+let isSyncing = false;
+export let isLoadingFromCloud = false;
+
 export async function syncDataToCloud(user) {
-    if (!user) return;
+    if (!user || isSyncing || isLoadingFromCloud) return;
+    isSyncing = true;
+    
     const db = getDbRef();
-    if (!db) return; // DB not initialized yet (missing real config)
+    if (!db) {
+        isSyncing = false;
+        return; // DB not initialized yet (missing real config)
+    }
     
     syncEvents.onSyncStatusChange('syncing');
     try {
+        const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
             tasks: state.tasks,
@@ -29,15 +38,23 @@ export async function syncDataToCloud(user) {
     } catch (e) {
         syncEvents.onSyncStatusChange('error');
         console.error("Error syncing to cloud:", e);
+    } finally {
+        isSyncing = false;
     }
 }
 
 export async function loadDataFromCloud(user) {
-    if (!user) return;
+    if (!user || isLoadingFromCloud) return;
+    isLoadingFromCloud = true;
+    
     const db = getDbRef();
-    if (!db) return;
+    if (!db) {
+        isLoadingFromCloud = false;
+        return;
+    }
     
     try {
+        const { doc, getDoc } = await import("firebase/firestore");
         const userRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(userRef);
         
@@ -46,7 +63,7 @@ export async function loadDataFromCloud(user) {
             console.log("Cloud data found, merging with local state...");
             
             // For settings, cloud takes precedence if exists
-            if (data.settings) {
+            if (data.settings && typeof data.settings === 'object') {
                 state.settings = { ...state.settings, ...data.settings };
                 // Update UI based on new settings
                 applySettingsToUI();
@@ -60,7 +77,7 @@ export async function loadDataFromCloud(user) {
             }
             
             // For tasks, we merge local and cloud state
-            if (data.tasks) {
+            if (Array.isArray(data.tasks)) {
                 const localTasks = state.tasks;
                 const cloudTasks = data.tasks;
                 
@@ -90,7 +107,7 @@ export async function loadDataFromCloud(user) {
             }
             
             // Sync focusHistory
-            if (data.focusHistory) {
+            if (data.focusHistory && typeof data.focusHistory === 'object') {
                 state.focusHistory = data.focusHistory;
             }
         } else {
@@ -100,5 +117,7 @@ export async function loadDataFromCloud(user) {
         }
     } catch (e) {
         console.error("Error loading from cloud:", e);
+    } finally {
+        isLoadingFromCloud = false;
     }
 }

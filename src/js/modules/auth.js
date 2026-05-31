@@ -1,14 +1,16 @@
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
 import { loadDataFromCloud, syncEvents } from './sync.js';
-import { onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
+
 
 let currentUser = null;
 
-export function initAuth() {
-    initFirebase();
+export async function initAuth() {
+    await initFirebase();
     const auth = getAuthRef();
     if (!auth) return;
+    
+    const { onAuthStateChanged } = await import("firebase/auth");
     
     // Listen for auth state changes
     onAuthStateChanged(auth, async (user) => {
@@ -16,10 +18,12 @@ export function initAuth() {
         if (user) {
             console.log("User logged in:", user.email);
             showLoggedInView(user);
+            if (window.lucide) window.lucide.createIcons();
             await loadDataFromCloud(user);
         } else {
             console.log("User logged out");
             showLoggedOutView();
+            if (window.lucide) window.lucide.createIcons();
         }
     });
 
@@ -103,10 +107,12 @@ function showError(msg) {
 }
 
 async function signInWithGoogle() {
+    await initFirebase();
     const auth = getAuthRef();
     const provider = getGoogleProviderRef();
     if (!auth || !provider) return showError("Firebase not configured");
     
+    const { signInWithPopup } = await import("firebase/auth");
     try {
         await signInWithPopup(auth, provider);
         toggleAuthModal(false);
@@ -122,12 +128,14 @@ async function handleEmailAuth(e, action) {
         return;
     }
 
+    await initFirebase();
     const auth = getAuthRef();
     if (!auth) return showError("Firebase not configured");
 
     const email = elements.authEmail.value;
     const password = elements.authPassword.value;
     
+    const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import("firebase/auth");
     try {
         if (action === 'login') {
             await signInWithEmailAndPassword(auth, email, password);
@@ -149,6 +157,7 @@ async function handleEmailAuth(e, action) {
 async function signOut() {
     const auth = getAuthRef();
     if (!auth) return;
+    const { signOut: firebaseSignOut } = await import("firebase/auth");
     try {
         await firebaseSignOut(auth);
         toggleAuthModal(false);
