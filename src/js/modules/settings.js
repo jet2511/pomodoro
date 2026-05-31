@@ -1,4 +1,4 @@
-import { state, saveSettings as saveStateSettings } from './state.js';
+import { state, saveSettings as saveStateSettings, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { setMode } from './timer.js';
 import { updateVolume } from './audio.js';
@@ -25,15 +25,13 @@ export function applyTheme() {
     }
 }
 
-export function updateVolumeDisplay(value) {
-    elements.volumeDisplay.textContent = value;
-}
+
 
 export function saveSettings() {
-    state.settings.pomodoro = parseInt(elements.inputs.pomodoro.value) || 25;
-    state.settings.shortBreak = parseInt(elements.inputs.shortBreak.value) || 5;
-    state.settings.longBreak = parseInt(elements.inputs.longBreak.value) || 15;
-    state.settings.longBreakInterval = parseInt(elements.inputs.longBreakInterval.value) || 4;
+    state.settings.pomodoro = Math.min(90, Math.max(1, parseInt(elements.inputs.pomodoro.value) || 25));
+    state.settings.shortBreak = Math.min(30, Math.max(1, parseInt(elements.inputs.shortBreak.value) || 5));
+    state.settings.longBreak = Math.min(60, Math.max(1, parseInt(elements.inputs.longBreak.value) || 15));
+    state.settings.longBreakInterval = Math.min(10, Math.max(1, parseInt(elements.inputs.longBreakInterval.value) || 4));
     
     state.settings.autoStartBreaks = elements.inputs.autoStartBreaks.checked;
     state.settings.autoStartPomodoros = elements.inputs.autoStartPomodoros.checked;
@@ -49,6 +47,7 @@ export function saveSettings() {
     if (!state.isRunning) {
         setMode(state.mode);
     }
+    notifyStateChange();
 }
 
 export function toggleSettingsModal(show) {

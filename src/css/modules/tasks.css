@@ -7,7 +7,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     padding-bottom: 0.75rem;
 }
@@ -25,7 +25,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.5rem;
     background: rgba(0, 0, 0, 0.1);
     padding: 1.5rem;
     border-radius: 12px;
@@ -107,28 +107,7 @@
     outline: none;
 }
 
-.est-pomodoros label {
-    font-size: 0.8rem;
-    color: var(--clr-text-muted);
-}
 
-.est-pomodoros input {
-    width: 40px;
-    background: transparent;
-    border: none;
-    color: var(--clr-text);
-    font-weight: bold;
-    text-align: center;
-    padding: 0.75rem 0;
-}
-
-.est-pomodoros input:focus {
-    outline: none;
-}
-
-.est-pomodoros-inline input:focus {
-    outline: none;
-}
 
 .add-btn {
     background: rgba(0, 0, 0, 0.2);
@@ -179,7 +158,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    min-height: 50px;
 }
+
+
 
 .task-item {
     background: var(--glass-bg);
@@ -342,9 +324,7 @@ body.mode-longBreak .task-item.completed .task-check {
         flex-direction: column;
     }
 
-    .est-pomodoros {
-        justify-content: space-between;
-    }
+
 
     .add-btn {
         width: 100%;

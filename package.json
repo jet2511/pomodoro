@@ -2,7 +2,6 @@
     "name": "pomodoro-pwa",
     "version": "1.0.0",
     "description": "Modern Pomodoro Timer with PWA and Advanced Features",
-    "main": "js/app.js",
     "scripts": {
         "dev": "vite",
         "build": "vite build",

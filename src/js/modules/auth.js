@@ -1,14 +1,16 @@
-import { onAuthStateChanged, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
-import { loadDataFromCloud } from './sync.js';
+import { loadDataFromCloud, syncEvents } from './sync.js';
+
 
 let currentUser = null;
 
-export function initAuth() {
-    initFirebase();
+export async function initAuth() {
+    await initFirebase();
     const auth = getAuthRef();
     if (!auth) return;
+    
+    const { onAuthStateChanged } = await import("firebase/auth");
     
     // Listen for auth state changes
     onAuthStateChanged(auth, async (user) => {
@@ -16,10 +18,12 @@ export function initAuth() {
         if (user) {
             console.log("User logged in:", user.email);
             showLoggedInView(user);
+            if (window.lucide) window.lucide.createIcons();
             await loadDataFromCloud(user);
         } else {
             console.log("User logged out");
             showLoggedOutView();
+            if (window.lucide) window.lucide.createIcons();
         }
     });
 
@@ -30,6 +34,11 @@ export function initAuth() {
     elements.googleLoginBtn.addEventListener('click', signInWithGoogle);
     elements.emailLoginBtn.addEventListener('click', (e) => handleEmailAuth(e, 'login'));
     elements.emailRegisterBtn.addEventListener('click', (e) => handleEmailAuth(e, 'register'));
+    // Listen for sync status
+    syncEvents.onSyncStatusChange = (status) => {
+        updateSyncUI(status);
+    };
+
     elements.logoutBtn.addEventListener('click', signOut);
 }
 
@@ -69,6 +78,27 @@ function showLoggedOutView() {
     
     // Update header button
     elements.authUsername.style.display = 'none';
+    updateSyncUI('none');
+}
+
+function updateSyncUI(status) {
+    const indicator = elements.syncIndicator;
+    if (!indicator) return;
+
+    indicator.classList.remove('syncing', 'synced', 'error');
+    
+    if (status === 'syncing') {
+        indicator.textContent = 'Syncing...';
+        indicator.classList.add('syncing');
+    } else if (status === 'synced') {
+        indicator.textContent = 'Synced';
+        indicator.classList.add('synced');
+    } else if (status === 'error') {
+        indicator.textContent = 'Sync Error';
+        indicator.classList.add('error');
+    } else if (status === 'none') {
+        indicator.textContent = 'Not Logged In';
+    }
 }
 
 function showError(msg) {
@@ -77,10 +107,12 @@ function showError(msg) {
 }
 
 async function signInWithGoogle() {
+    await initFirebase();
     const auth = getAuthRef();
     const provider = getGoogleProviderRef();
     if (!auth || !provider) return showError("Firebase not configured");
     
+    const { signInWithPopup } = await import("firebase/auth");
     try {
         await signInWithPopup(auth, provider);
         toggleAuthModal(false);
@@ -96,12 +128,14 @@ async function handleEmailAuth(e, action) {
         return;
     }
 
+    await initFirebase();
     const auth = getAuthRef();
     if (!auth) return showError("Firebase not configured");
 
     const email = elements.authEmail.value;
     const password = elements.authPassword.value;
     
+    const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import("firebase/auth");
     try {
         if (action === 'login') {
             await signInWithEmailAndPassword(auth, email, password);
@@ -110,9 +144,12 @@ async function handleEmailAuth(e, action) {
         }
         toggleAuthModal(false);
     } catch (error) {
-        let cleanMsg = error.message;
-        if(error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";
-        if(error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') cleanMsg = "Invalid email or password.";
+        let cleanMsg = "An error occurred. Please try again.";
+        if (error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";
+        else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') cleanMsg = "Invalid email or password.";
+        else if (error.code === 'auth/too-many-requests') cleanMsg = "Too many attempts. Please try again later.";
+        else if (error.code === 'auth/weak-password') cleanMsg = "Password is too weak. Must be at least 6 characters.";
+        else if (error.code === 'auth/invalid-email') cleanMsg = "Invalid email format.";
         showError(cleanMsg);
     }
 }
@@ -120,6 +157,7 @@ async function handleEmailAuth(e, action) {
 async function signOut() {
     const auth = getAuthRef();
     if (!auth) return;
+    const { signOut: firebaseSignOut } = await import("firebase/auth");
     try {
         await firebaseSignOut(auth);
         toggleAuthModal(false);

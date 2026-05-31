@@ -1,25 +1,40 @@
 import { elements } from './modules/elements.js';
-import { loadSettings } from './modules/state.js';
+import { loadSettings, stateEvents } from './modules/state.js';
 import { setMode, toggleTimer, skipPhase, timerEvents } from './modules/timer.js';
-import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, updateTaskPomodoros, taskEvents } from './modules/tasks.js';
+import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, updateTaskPomodoros, taskEvents, getFirstIncompleteTask } from './modules/tasks.js';
 import { toggleSettingsModal, saveSettings, applyTheme } from './modules/settings.js';
 import { updateVolume } from './modules/audio.js';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
-import { initPiP, togglePiP, updatePipTask } from './modules/pip.js';
+import { initPiP, togglePiP, updateActiveTaskDisplay } from './modules/pip.js';
+import { isUserTyping, debounce, trapFocus, customConfirm } from './modules/utils.js';
 
-// Setup Event Bridges
+// Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
     updateTaskPomodoros();
     updateStatsUI();
-    const user = getCurrentUser();
-    if (user) syncDataToCloud(user);
+};
+
+timerEvents.onPomodoroStart = async () => {
+    const task = getFirstIncompleteTask();
+    
+    if (task) {
+        const wantsToSelect = await customConfirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
+        if (wantsToSelect) {
+            setActiveTask(task.id);
+        }
+        return true; 
+    } else {
+        elements.form.classList.add('pulse-warning');
+        setTimeout(() => elements.form.classList.remove('pulse-warning'), 1000);
+        return true; 
+    }
 };
 
 taskEvents.onTaskActivated = () => {
     setMode('pomodoro');
-    updatePipTask();
+    updateActiveTaskDisplay();
 };
 
 // ... Timer Event Listeners ...
@@ -44,10 +59,7 @@ elements.form.addEventListener('submit', (e) => {
         elements.taskInput.value = '';
         elements.estPomodorosInput.value = '1';
         elements.taskInput.focus();
-        updatePipTask();
-
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
+        updateActiveTaskDisplay();
     }
 });
 
@@ -55,27 +67,21 @@ elements.taskList.addEventListener('click', (e) => {
     const checkBtn = e.target.closest('[data-action="toggle"]');
     if (checkBtn) {
         toggleTaskComplete(checkBtn.dataset.id);
-        updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
+        updateActiveTaskDisplay();
         return;
     }
 
     const contentBtn = e.target.closest('[data-action="activate"]');
     if (contentBtn) {
         setActiveTask(contentBtn.dataset.id);
-        updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
+        updateActiveTaskDisplay();
         return;
     }
 
     const deleteBtn = e.target.closest('[data-action="delete"]');
     if (deleteBtn) {
         deleteTask(deleteBtn.dataset.id);
-        updatePipTask();
-        const user = getCurrentUser();
-        if (user) syncDataToCloud(user);
+        updateActiveTaskDisplay();
         return;
     }
 });
@@ -86,9 +92,6 @@ elements.closeSettingsBtn.addEventListener('click', () => toggleSettingsModal(fa
 elements.saveSettingsBtn.addEventListener('click', () => {
     saveSettings();
     toggleSettingsModal(false);
-
-    const user = getCurrentUser();
-    if (user) syncDataToCloud(user);
 });
 
 elements.inputs.volume.addEventListener('input', (e) => {
@@ -102,15 +105,24 @@ elements.pipBtn.addEventListener('click', togglePiP);
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', (e) => {
     // Check if user is typing in an input or textarea
-    const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    const typing = isUserTyping(e);
 
-    if (e.key === 'Escape') {
-        if (!elements.settingsModal.classList.contains('hidden')) toggleSettingsModal(false);
-        if (!elements.authModal.classList.contains('hidden')) toggleAuthModal(false);
+    const isSettingsOpen = !elements.settingsModal.classList.contains('hidden');
+    const isAuthOpen = !elements.authModal.classList.contains('hidden');
+
+    if (isSettingsOpen) {
+        trapFocus(e, elements.settingsModal);
+    } else if (isAuthOpen) {
+        trapFocus(e, elements.authModal);
     }
 
-    // Keyboard Shortcuts (only if not typing)
-    if (!isTyping) {
+    if (e.key === 'Escape') {
+        if (isSettingsOpen) toggleSettingsModal(false);
+        if (isAuthOpen) toggleAuthModal(false);
+    }
+
+    // Keyboard Shortcuts (only if not typing and no modifier keys and no modal open)
+    if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen) {
         if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             toggleTimer();
@@ -144,6 +156,15 @@ function init() {
     updateStatsUI();
     setMode('pomodoro');
     initPiP();
+    if (window.lucide) window.lucide.createIcons();
+
+    // Centralized Syncing
+    const debouncedSync = debounce(() => {
+        const user = getCurrentUser();
+        if (user) syncDataToCloud(user);
+    }, 2000);
+
+    stateEvents.onStateChange = debouncedSync;
 
     // Initialize Firebase Auth
     initAuth();

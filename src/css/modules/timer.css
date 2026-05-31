@@ -12,7 +12,7 @@
     background: rgba(0,0,0,0.1);
     padding: 0.35rem;
     border-radius: 50px;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .mode-btn {
@@ -63,6 +63,15 @@ body.mode-longBreak .mode-btn.active { color: var(--clr-bg-long); }
 .progress-ring__circle, .progress-ring__circle-bg {
     transition: stroke-dashoffset 1s linear;
 }
+
+.timer-display.is-running .progress-ring__circle {
+    filter: drop-shadow(0 0 8px rgba(255,255,255,0.4));
+}
+
+:root[data-theme="light"] .timer-display.is-running .progress-ring__circle {
+    filter: drop-shadow(0 0 8px rgba(0,0,0,0.3));
+}
+
 :root[data-theme="light"] .progress-ring__circle-bg { stroke: rgba(0, 0, 0, 0.1); }
 :root[data-theme="light"] .progress-ring__circle { stroke: #333; }
 
@@ -97,6 +106,16 @@ body.mode-longBreak .mode-btn.active { color: var(--clr-bg-long); }
     font-size: 1.2rem;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
+
+.timer-section:not(.running) .control-btn.primary {
+    animation: breathing 2.5s infinite alternate ease-in-out;
+}
+
+@keyframes breathing {
+    0% { transform: scale(1); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    100% { transform: scale(1.03); box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
+}
+
 body.mode-pomodoro .control-btn.primary { color: var(--clr-bg-pomodoro); }
 body.mode-shortBreak .control-btn.primary { color: var(--clr-bg-short); }
 body.mode-longBreak .control-btn.primary { color: var(--clr-bg-long); }
@@ -113,8 +132,8 @@ body.mode-longBreak .control-btn.primary { color: var(--clr-bg-long); }
 .control-btn.secondary {
     background: var(--glass-bg);
     color: var(--clr-text);
-    width: 50px;
-    height: 50px;
+    width: 48px;
+    height: 48px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -127,10 +146,46 @@ body.mode-longBreak .control-btn.primary { color: var(--clr-bg-long); }
     transform: scale(1.05);
 }
 
+
+
 .status-text {
     font-size: 0.9rem;
     color: var(--clr-text-muted);
     font-weight: 500;
 }
 
+.current-task-display {
+    margin-top: 0.2rem;
+    margin-bottom: 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.15);
+    padding: 0.2rem 0.8rem;
+    border-radius: 20px;
+    max-width: 75%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: none;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
 
+.current-task-display.has-task {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 380px) {
+    .mode-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}

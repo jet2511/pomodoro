@@ -1,4 +1,6 @@
 import { elements } from './elements.js';
+import { state } from './state.js';
+import pipCss from '../../css/modules/pip.css?inline';
 
 let pipWindow = null;
 let timerParent = null;
@@ -24,156 +26,210 @@ export async function togglePiP() {
         const timerSection = document.querySelector('.timer-section');
         if (!timerSection) return console.error('Timer section not found');
 
+        console.log('PiP: Requesting window...');
+        // Request a 20% smaller 1:1 square window (240x240)
         pipWindow = await window.documentPictureInPicture.requestWindow({
-            width: 380,
-            height: 560,
+            width: 240,
+            height: 240,
         });
 
+        console.log('PiP: Copying styles...');
         copyStyles(pipWindow);
-        timerParent = timerSection.parentNode;
-        const nextSibling = timerSection.nextSibling;
 
-        pipWindow.document.body.append(timerSection);
-        pipWindow.document.body.classList.add('pip-body');
+        // Defer injection to ensure PiP window document is fully ready
+        requestAnimationFrame(() => {
+            try {
+                console.log('PiP: Injecting content...');
+                timerParent = timerSection.parentNode;
+                const nextSibling = timerSection.nextSibling;
 
-        const updateUI = () => {
-            if (!pipWindow) return;
-            const currentMode = document.body.className.split(' ').find(c => c.startsWith('mode-')) || 'mode-pomodoro';
-            pipWindow.document.body.className = `pip-body ${currentMode}`;
-            updatePipTask();
-        };
+                // Explicitly adopt the node into the PiP document
+                const adoptedSection = pipWindow.document.adoptNode(timerSection);
+                pipWindow.document.body.append(adoptedSection);
+                pipWindow.document.body.classList.add('pip-body');
 
-        const observer = new MutationObserver(updateUI);
-        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+                // Move task label inside the circular timer
+                const pipTaskEl = adoptedSection.querySelector('#current-task-display');
+                const timerDisplay = adoptedSection.querySelector('.timer-display');
+                const svgElement = adoptedSection.querySelector('.progress-ring');
+                
+                if (svgElement && !svgElement.getAttribute('viewBox')) {
+                    svgElement.setAttribute('viewBox', '0 0 250 250');
+                }
+                
+                const originalTaskParent = pipTaskEl ? taskLabelInitialParent(pipTaskEl) : null;
+                const originalTaskSibling = pipTaskEl ? pipTaskEl.nextSibling : null;
+                
+                // We no longer move the task display inside the timer.
+                // It remains below the controls (which are hidden), so it sits under the timer.
 
-        const taskObserver = new MutationObserver(updatePipTask);
-        const taskList = document.getElementById('task-list');
-        if (taskList) taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
+                // Create the hover overlay using PiP document context
+                const overlay = pipWindow.document.createElement('div');
+                overlay.id = 'pip-overlay';
+                overlay.className = 'pip-overlay hidden';
+                
+                const playSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                const pauseSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                const skipSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>';
 
-        pipWindow.document.addEventListener('keydown', (e) => {
-            const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
-            if (isTyping) return;
+                overlay.innerHTML = `
+                    <div class="pip-control-icon play-pause-btn">
+                        <div class="icon-container">${state.isRunning ? pauseSvg : playSvg}</div>
+                        <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
+                    </div>
+                    <div class="pip-control-icon skip-btn">
+                        <div class="icon-container">${skipSvg}</div>
+                        <span class="pip-control-label">Skip</span>
+                    </div>
+                `;
+                pipWindow.document.body.appendChild(overlay);
 
-            if (e.code === 'Space') {
-                e.preventDefault();
-                import('./timer.js').then(m => m.toggleTimer());
-            } else if (e.key.toLowerCase() === 's') {
-                import('./timer.js').then(m => m.skipPhase());
-            } else if (e.key.toLowerCase() === 'p') {
-                togglePiP();
+                const updateUI = () => {
+                    if (!pipWindow || pipWindow.closed) return;
+                    const currentMode = document.body.className.split(' ').find(c => c.startsWith('mode-')) || 'mode-pomodoro';
+                    pipWindow.document.body.className = `pip-body ${currentMode}`;
+                    
+                    if (timerDisplay) {
+                        if (state.isRunning) {
+                            timerDisplay.classList.add('is-running');
+                        } else {
+                            timerDisplay.classList.remove('is-running');
+                        }
+                    }
+                    
+                    const iconContainerEl = overlay.querySelector('.play-pause-btn .icon-container');
+                    const labelEl = overlay.querySelector('.play-pause-btn .pip-control-label');
+                    if (iconContainerEl && labelEl) {
+                        iconContainerEl.innerHTML = state.isRunning ? pauseSvg : playSvg;
+                        labelEl.textContent = state.isRunning ? 'Stop' : 'Resume';
+                    }
+                    
+                    updateActiveTaskDisplay();
+                };
+
+                const observer = new MutationObserver(updateUI);
+                observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+                const taskObserver = new MutationObserver(updateActiveTaskDisplay);
+                const taskList = document.getElementById('task-list');
+                if (taskList) taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
+
+                pipWindow.document.body.addEventListener('mouseenter', () => overlay.classList.remove('hidden'));
+                pipWindow.document.body.addEventListener('mouseleave', () => overlay.classList.add('hidden'));
+                
+                const playPauseBtn = overlay.querySelector('.play-pause-btn');
+                const skipBtn = overlay.querySelector('.skip-btn');
+                
+                playPauseBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const { toggleTimer } = await import('./timer.js');
+                    toggleTimer();
+                    updateUI();
+                });
+
+                skipBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const { skipPhase } = await import('./timer.js');
+                    skipPhase();
+                });
+
+                pipWindow.document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        import('./timer.js').then(m => m.toggleTimer());
+                    } else if (e.key.toLowerCase() === 's') {
+                        import('./timer.js').then(m => m.skipPhase());
+                    } else if (e.key.toLowerCase() === 'p') {
+                        pipWindow.close();
+                    }
+                });
+
+                pipWindow.addEventListener('pagehide', () => {
+                    console.log('PiP: Closing and restoring...');
+                    pipWindow = null;
+                    observer.disconnect();
+                    taskObserver.disconnect();
+                    
+                    if (pipTaskEl && originalTaskParent) {
+                        originalTaskParent.appendChild(pipTaskEl);
+                    }
+
+                    if (timerParent && adoptedSection) {
+                        document.adoptNode(adoptedSection);
+                        if (nextSibling) timerParent.insertBefore(adoptedSection, nextSibling);
+                        else timerParent.appendChild(adoptedSection);
+                    }
+                });
+
+                updateUI();
+                console.log('PiP: Success');
+
+            } catch (innerErr) {
+                console.error('PiP Injection Error:', innerErr);
             }
         });
-
-        pipWindow.addEventListener('pagehide', () => {
-            pipWindow = null;
-            observer.disconnect();
-            taskObserver.disconnect();
-            if (timerParent && timerSection) {
-                if (nextSibling) timerParent.insertBefore(timerSection, nextSibling);
-                else timerParent.appendChild(timerSection);
-            }
-        });
-
-        updateUI();
 
     } catch (err) {
-        console.error('PiP failed:', err);
+        console.error('PiP Launch Error:', err);
     }
 }
 
+// Helper to remember initial parent before move
+function taskLabelInitialParent(el) {
+    return el.parentNode;
+}
+
 function copyStyles(targetWindow) {
+    const targetDoc = targetWindow.document;
+
+    // Font Awesome
+    const faLink = targetDoc.createElement('link');
+    faLink.rel = 'stylesheet';
+    faLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+    targetDoc.head.appendChild(faLink);
+
+    // Main Styles
     [...document.styleSheets].forEach((styleSheet) => {
         try {
-            const style = document.createElement('style');
-            style.textContent = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
-            targetWindow.document.head.appendChild(style);
+            if (styleSheet.cssRules) {
+                const style = targetDoc.createElement('style');
+                const rules = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
+                style.textContent = rules;
+                targetDoc.head.appendChild(style);
+            }
         } catch (e) {
             if (styleSheet.href) {
-                const link = document.createElement('link');
+                const link = targetDoc.createElement('link');
                 link.rel = 'stylesheet';
                 link.href = styleSheet.href;
-                targetWindow.document.head.appendChild(link);
+                targetDoc.head.appendChild(link);
             }
         }
     });
 
-    const pipStyle = document.createElement('style');
-    pipStyle.textContent = `
-        body.pip-body {
-            background-color: var(--clr-bg-pomodoro) !important;
-            margin: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            align-items: center !important;
-            height: 100vh !important;
-            width: 100vw !important;
-            overflow: hidden !important;
-            font-family: 'Inter', sans-serif !important;
-            color: white !important;
-        }
-        body.pip-body.mode-shortBreak { background-color: var(--clr-bg-short) !important; }
-        body.pip-body.mode-longBreak { background-color: var(--clr-bg-long) !important; }
-        .timer-section {
-            width: 100% !important; height: 100% !important;
-            display: flex !important; flex-direction: column !important;
-            justify-content: space-around !important; align-items: center !important;
-            margin: 0 !important; padding: 10px !important;
-            background: transparent !important; box-shadow: none !important; border: none !important;
-            box-sizing: border-box !important;
-        }
-        .mode-selector, .status-text { display: none !important; }
-        .timer-display {
-            position: relative !important; width: 250px !important; height: 250px !important;
-            min-height: 250px !important; flex-shrink: 0 !important;
-            display: flex !important; justify-content: center !important; align-items: center !important;
-            margin: 0 !important;
-        }
-        .progress-ring {
-            position: absolute !important; top: 0 !important; left: 0 !important;
-            transform: rotate(-90deg) !important; width: 250px !important; height: 250px !important;
-        }
-        .time { 
-            font-size: 4.5rem !important; font-weight: bold !important; line-height: 1 !important;
-            z-index: 10 !important; position: relative !important; text-align: center !important;
-            margin: 0 !important; color: white !important;
-        }
-        .controls { 
-            display: flex !important; gap: 20px !important; 
-            justify-content: center !important; align-items: center !important;
-            width: 100% !important; flex-shrink: 0 !important;
-            margin: 0 !important;
-        }
-        .control-btn { border-radius: 50px !important; border: none !important; cursor: pointer !important; }
-        .control-btn.primary { 
-            background: white !important; color: #333 !important; min-width: 140px !important; 
-            padding: 12px 24px !important; font-weight: bold !important; font-size: 1.1rem !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
-        }
-        .control-btn.secondary { 
-            background: rgba(255, 255, 255, 0.2) !important; color: white !important;
-            width: 50px !important; height: 50px !important;
-            display: flex !important; justify-content: center !important; align-items: center !important;
-            font-size: 1.3rem !important; box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
-        }
-        #pip-current-task {
-            font-size: 1.1rem !important; font-weight: 500 !important;
-            text-align: center !important; max-width: 90% !important;
-            white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
-            flex-shrink: 0 !important; color: rgba(255, 255, 255, 0.9) !important;
-            margin: 0 !important;
-        }
-    `;
-    targetWindow.document.head.appendChild(pipStyle);
+    // Custom PiP Utility Overrides
+    const pipStyle = targetDoc.createElement('style');
+    pipStyle.textContent = pipCss;
+    targetDoc.head.appendChild(pipStyle);
 }
 
-export function updatePipTask() {
-    if (!pipWindow) return;
-    const taskEl = pipWindow.document.getElementById('pip-current-task');
+export function updateActiveTaskDisplay() {
+    let taskEl = null;
+    if (pipWindow && !pipWindow.closed) {
+        taskEl = pipWindow.document.getElementById('current-task-display');
+    }
+    if (!taskEl) {
+        taskEl = document.getElementById('current-task-display');
+    }
+    
     if (taskEl) {
         const activeTask = document.querySelector('.task-item.active .task-text');
-        taskEl.textContent = activeTask ? activeTask.textContent : '';
-        taskEl.style.display = activeTask ? 'block' : 'none';
-        if (activeTask) taskEl.style.minHeight = '1.2em';
+        if (activeTask) {
+            taskEl.textContent = activeTask.textContent;
+            taskEl.classList.add('has-task');
+        } else {
+            taskEl.textContent = '';
+            taskEl.classList.remove('has-task');
+        }
     }
 }

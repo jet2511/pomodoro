@@ -1,9 +1,14 @@
-import { state } from './state.js';
+import { state, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { toggleBackgroundSound, playAlarm } from './audio.js';
+import { customConfirm } from './utils.js';
 
+let sessionStartTime = null;
+let sessionAccumulatedMs = 0;
+let targetEndTime = null;
 export const timerEvents = {
-    onPomodoroComplete: () => { }
+    onPomodoroComplete: () => { },
+    onPomodoroStart: null // returns true if start should proceed
 };
 
 // Progress Circle setup
@@ -60,9 +65,10 @@ function getModeName(mode) {
     }
 }
 
-export function setMode(mode) {
+export async function setMode(mode) {
     if (state.isRunning) {
-        if (!confirm('Timer is running. Are you sure you want to switch modes?')) {
+        const wantsToSwitch = await customConfirm('Timer is running. Are you sure you want to switch modes?');
+        if (!wantsToSwitch) {
             elements.modeBtns.forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === state.mode);
             });
@@ -71,13 +77,18 @@ export function setMode(mode) {
         stopTimer(false);
     }
 
+    sessionAccumulatedMs = 0;
+    sessionStartTime = null;
+
     state.mode = mode;
     state.timeRemaining = state.settings[mode] * 60;
 
     elements.body.className = `mode-${mode}`;
 
     elements.modeBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
+        const isActive = btn.dataset.mode === mode;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive.toString());
     });
 
     updateDisplay();
@@ -93,9 +104,22 @@ function updateStatusText() {
     }
 }
 
-function startTimer() {
+async function startTimer() {
+    if (state.mode === 'pomodoro' && !state.activeTaskId) {
+        if (timerEvents.onPomodoroStart) {
+            const shouldContinue = await timerEvents.onPomodoroStart();
+            if (!shouldContinue) return; // Start aborted
+        }
+    }
+
     state.isRunning = true;
     elements.mainBtn.textContent = 'Pause';
+    elements.mainBtn.setAttribute('aria-label', 'Pause Timer');
+    
+    // Add classes for animations
+    elements.timeDisplay.parentElement.classList.add('is-running');
+    elements.timeDisplay.closest('.timer-section').classList.add('running');
+    
     updateStatusText();
 
     toggleBackgroundSound(true);
@@ -104,26 +128,54 @@ function startTimer() {
         Notification.requestPermission();
     }
 
-    let expected = Date.now() + 1000;
+    sessionStartTime = Date.now();
+    targetEndTime = sessionStartTime + (state.timeRemaining * 1000);
+
     state.timerId = setInterval(() => {
-        const diff = Date.now() - expected;
-        if (state.timeRemaining > 0) {
-            state.timeRemaining--;
+        const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
+        
+        if (state.timeRemaining !== remaining) {
+            state.timeRemaining = remaining;
             updateDisplay();
-            expected += 1000;
-        } else {
+        }
+        
+        if (state.timeRemaining <= 0) {
             handleTimerComplete();
         }
-    }, 1000);
+    }, 200); // Update frequently for accuracy
 }
+
+// Ensure timer UI updates immediately when returning to the tab
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.isRunning && targetEndTime) {
+        const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
+        state.timeRemaining = remaining;
+        updateDisplay();
+        if (state.timeRemaining <= 0) {
+            handleTimerComplete();
+        }
+    }
+});
 
 function stopTimer(completed = false) {
     if (state.timerId) {
         clearInterval(state.timerId);
         state.timerId = null;
     }
+    
+    if (sessionStartTime) {
+        sessionAccumulatedMs += (Date.now() - sessionStartTime);
+        sessionStartTime = null;
+    }
+
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
+    elements.mainBtn.setAttribute('aria-label', 'Start Timer');
+    
+    // Remove classes for animations
+    elements.timeDisplay.parentElement.classList.remove('is-running');
+    elements.timeDisplay.closest('.timer-section').classList.remove('running');
+    
     toggleBackgroundSound(false);
 
     if (!completed) {
@@ -131,17 +183,21 @@ function stopTimer(completed = false) {
     }
 }
 
-export function toggleTimer() {
+export async function toggleTimer() {
     if (state.isRunning) {
         stopTimer();
     } else {
-        startTimer();
+        await startTimer();
     }
 }
 
-export function skipPhase() {
-    stopTimer(true);
-    handleTimerComplete();
+export async function skipPhase() {
+    if (state.isRunning) {
+        const wantsToSkip = await customConfirm("Are you sure you want to skip the current phase?");
+        if (!wantsToSkip) return;
+    }
+    // handleTimerComplete already calls stopTimer(true)
+    handleTimerComplete(true);
 }
 
 function showNotification(title, body) {
@@ -150,29 +206,36 @@ function showNotification(title, body) {
     }
 }
 
-function handleTimerComplete() {
+function handleTimerComplete(isSkipped = false) {
     stopTimer(true);
-    playAlarm();
+    if (!isSkipped) playAlarm();
 
     if (state.mode === 'pomodoro') {
-        state.pomodorosCompleted++;
+        if (!isSkipped) {
+            state.pomodorosCompleted++;
 
-        // Record Analytics
-        const today = new Date().toISOString().split('T')[0];
-        if (!state.focusHistory[today]) {
-            state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
+            // Record Analytics
+            const today = new Date().toISOString().split('T')[0];
+            if (!state.focusHistory[today]) {
+                state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
+            }
+            state.focusHistory[today].pomodoros++;
+            
+            const elapsedSeconds = Math.round(sessionAccumulatedMs / 1000);
+            state.focusHistory[today].seconds += elapsedSeconds;
+            sessionAccumulatedMs = 0;
+
+            notifyStateChange();
+
+            // Notify tasks module via app.js
+            timerEvents.onPomodoroComplete();
         }
-        state.focusHistory[today].pomodoros++;
-        state.focusHistory[today].seconds += state.settings.pomodoro * 60;
 
-        // Notify tasks module via app.js
-        timerEvents.onPomodoroComplete();
-
-        if (state.pomodorosCompleted % state.settings.longBreakInterval === 0) {
-            showNotification('Pomodoro Completed!', 'Time for a long break.');
+        if (state.pomodorosCompleted > 0 && state.pomodorosCompleted % state.settings.longBreakInterval === 0) {
+            if (!isSkipped) showNotification('Pomodoro Completed!', 'Time for a long break.');
             setMode('longBreak');
         } else {
-            showNotification('Pomodoro Completed!', 'Time for a short break.');
+            if (!isSkipped) showNotification('Pomodoro Completed!', 'Time for a short break.');
             setMode('shortBreak');
         }
 
@@ -181,7 +244,7 @@ function handleTimerComplete() {
         }
 
     } else {
-        showNotification('Break is over!', 'Time to focus.');
+        if (!isSkipped) showNotification('Break is over!', 'Time to focus.');
         setMode('pomodoro');
 
         if (state.settings.autoStartPomodoros) {

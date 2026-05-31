@@ -65,6 +65,7 @@ export const elements = {
     // User Display
     userDisplayName: document.getElementById('user-display-name'),
     userEmail: document.getElementById('user-email'),
+    syncIndicator: document.getElementById('sync-indicator'),
 
     // Stats
     statTotalPomodoros: document.getElementById('stat-total-pomodoros'),
