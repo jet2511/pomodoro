@@ -136,12 +136,51 @@ export async function togglePiP() {
                     skipPhase();
                 });
 
+                const showActionFeedback = (action) => {
+                    const feedback = pipWindow.document.createElement('div');
+                    feedback.className = 'pip-action-feedback';
+                    
+                    let svg = '';
+                    let text = '';
+                    
+                    if (action === 'play') {
+                        svg = playSvg;
+                        text = 'Resume';
+                    } else if (action === 'pause') {
+                        svg = pauseSvg;
+                        text = 'Stop';
+                    } else if (action === 'skip') {
+                        svg = skipSvg;
+                        text = 'Skip';
+                    }
+
+                    feedback.innerHTML = `
+                        <div class="icon">${svg}</div>
+                        <div class="text">${text}</div>
+                    `;
+                    pipWindow.document.body.appendChild(feedback);
+                    
+                    requestAnimationFrame(() => {
+                        feedback.classList.add('show');
+                        setTimeout(() => {
+                            feedback.classList.remove('show');
+                            setTimeout(() => feedback.remove(), 300);
+                        }, 600);
+                    });
+                };
+
                 pipWindow.document.addEventListener('keydown', (e) => {
                     if (e.code === 'Space') {
                         e.preventDefault();
-                        import('./timer.js').then(m => m.toggleTimer());
+                        import('./timer.js').then(m => {
+                            m.toggleTimer();
+                            showActionFeedback(state.isRunning ? 'play' : 'pause');
+                        });
                     } else if (e.key.toLowerCase() === 's') {
-                        import('./timer.js').then(m => m.skipPhase());
+                        import('./timer.js').then(m => {
+                            m.skipPhase();
+                            showActionFeedback('skip');
+                        });
                     } else if (e.key.toLowerCase() === 'p') {
                         pipWindow.close();
                     }
@@ -343,6 +382,42 @@ function copyStyles(targetWindow) {
             text-transform: uppercase !important; 
             letter-spacing: 1.5px !important;
             font-size: min(3vmin, 0.65rem) !important;
+        }
+
+        /* Action Feedback Animation */
+        .pip-action-feedback {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) scale(0.8) !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            color: white !important;
+            padding: min(4vmin, 15px) min(6vmin, 25px) !important;
+            border-radius: 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: min(2vmin, 8px) !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            z-index: 2000 !important;
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+        }
+        .pip-action-feedback.show {
+            opacity: 1 !important;
+            transform: translate(-50%, -50%) scale(1) !important;
+        }
+        .pip-action-feedback .icon svg {
+            width: min(10vmin, 40px) !important;
+            height: min(10vmin, 40px) !important;
+        }
+        .pip-action-feedback .text {
+            font-size: min(3.5vmin, 14px) !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
         }
 
         /* Responsive Layout for Short Windows or narrow windows */
