@@ -1,6 +1,5 @@
 import { elements } from './elements.js';
 import { state } from './state.js';
-import pipCss from '../../css/modules/pip.css?inline';
 
 let pipWindow = null;
 let timerParent = null;
@@ -60,25 +59,25 @@ export async function togglePiP() {
                 const originalTaskParent = pipTaskEl ? taskLabelInitialParent(pipTaskEl) : null;
                 const originalTaskSibling = pipTaskEl ? pipTaskEl.nextSibling : null;
                 
-                // We no longer move the task display inside the timer.
-                // It remains below the controls (which are hidden), so it sits under the timer.
-
+                // Move task label inside the circular timer
+                if (pipTaskEl && timerDisplay) {
+                    timerDisplay.appendChild(pipTaskEl);
+                }
                 // Create the hover overlay using PiP document context
                 const overlay = pipWindow.document.createElement('div');
                 overlay.id = 'pip-overlay';
                 overlay.className = 'pip-overlay hidden';
-                
-                const playSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
-                const pauseSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
-                const skipSvg = '<svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>';
+                const playSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                const pauseSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                const skipSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>`;
 
                 overlay.innerHTML = `
                     <div class="pip-control-icon play-pause-btn">
-                        <div class="icon-container">${state.isRunning ? pauseSvg : playSvg}</div>
+                        ${state.isRunning ? pauseSvg : playSvg}
                         <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
                     </div>
                     <div class="pip-control-icon skip-btn">
-                        <div class="icon-container">${skipSvg}</div>
+                        ${skipSvg}
                         <span class="pip-control-label">Skip</span>
                     </div>
                 `;
@@ -97,11 +96,15 @@ export async function togglePiP() {
                         }
                     }
                     
-                    const iconContainerEl = overlay.querySelector('.play-pause-btn .icon-container');
-                    const labelEl = overlay.querySelector('.play-pause-btn .pip-control-label');
-                    if (iconContainerEl && labelEl) {
-                        iconContainerEl.innerHTML = state.isRunning ? pauseSvg : playSvg;
-                        labelEl.textContent = state.isRunning ? 'Stop' : 'Resume';
+                    const playPauseBtn = overlay.querySelector('.play-pause-btn');
+                    if (playPauseBtn) {
+                        const playSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                        const pauseSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                        
+                        playPauseBtn.innerHTML = `
+                            ${state.isRunning ? pauseSvg : playSvg}
+                            <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
+                        `;
                     }
                     
                     updateActiveTaskDisplay();
@@ -151,7 +154,11 @@ export async function togglePiP() {
                     taskObserver.disconnect();
                     
                     if (pipTaskEl && originalTaskParent) {
-                        originalTaskParent.appendChild(pipTaskEl);
+                        if (originalTaskSibling) {
+                            originalTaskParent.insertBefore(pipTaskEl, originalTaskSibling);
+                        } else {
+                            originalTaskParent.appendChild(pipTaskEl);
+                        }
                     }
 
                     if (timerParent && adoptedSection) {
@@ -209,7 +216,155 @@ function copyStyles(targetWindow) {
 
     // Custom PiP Utility Overrides
     const pipStyle = targetDoc.createElement('style');
-    pipStyle.textContent = pipCss;
+    pipStyle.textContent = `
+        * { box-sizing: border-box !important; }
+        
+        body.pip-body {
+            background-color: var(--clr-bg-pomodoro) !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: grid !important;
+            place-items: center !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            overflow: hidden !important;
+            font-family: 'Inter', sans-serif !important;
+            color: white !important;
+        }
+        body.pip-body.mode-shortBreak { background-color: var(--clr-bg-short) !important; }
+        body.pip-body.mode-longBreak { background-color: var(--clr-bg-long) !important; }
+        
+        .timer-section {
+            width: 100% !important; 
+            height: 100% !important;
+            display: flex !important; 
+            flex-direction: column !important;
+            justify-content: center !important; 
+            align-items: center !important;
+            gap: 1vmin !important;
+            margin: 0 !important; 
+            padding: 0 !important;
+            background: transparent !important; 
+            box-shadow: none !important; 
+            border: none !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+        
+        .mode-selector, .status-text, .controls, .stats-section, .tasks-section, header { display: none !important; }
+        
+        .timer-display {
+            position: relative !important; 
+            width: 90vmin !important; 
+            height: 90vmin !important;
+            display: flex !important; 
+            flex-direction: column !important;
+            justify-content: center !important; 
+            align-items: center !important;
+            gap: 2.5vmin !important;
+            background: transparent !important;
+            border: none !important;
+            margin: 0 !important;
+        }
+        
+        .timer-display.is-running .progress-ring__circle {
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.4)) !important;
+        }
+        
+        .progress-ring {
+            position: absolute !important; 
+            top: 50% !important; 
+            left: 50% !important;
+            transform: translate(-50%, -50%) rotate(-90deg) !important; 
+            width: 100% !important; 
+            height: 100% !important;
+            pointer-events: none !important;
+        }
+        
+        .progress-ring__circle, .progress-ring__circle-bg {
+            stroke-width: 12 !important;
+        }
+        
+        .time { 
+            font-size: min(18vmin, 4.5rem) !important; 
+            font-weight: 700 !important; 
+            line-height: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            z-index: 10 !important;
+            letter-spacing: -1.5px !important;
+        }
+        
+        #current-task-display {
+            font-size: min(4.5vmin, 0.85rem) !important; 
+            max-width: 85% !important;
+            margin: 0 !important;
+            display: none !important;
+        }
+        #current-task-display.has-task {
+            display: block !important;
+        }
+
+        .pip-overlay {
+            position: fixed !important; 
+            top: 0 !important; 
+            left: 0 !important;
+            width: 100% !important; 
+            height: 100% !important;
+            background: rgba(0,0,0,0.6) !important;
+            display: flex !important; 
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important; 
+            align-items: center !important;
+            gap: min(8vmin, 20px) !important;
+            padding: 0 !important;
+            z-index: 1000 !important;
+            transition: opacity 0.2s ease !important;
+            min-width: 0 !important;
+        }
+        .pip-overlay.hidden { opacity: 0 !important; pointer-events: none !important; }
+        
+        .pip-control-icon {
+            display: flex !important; 
+            flex-direction: column !important;
+            align-items: center !important; 
+            gap: min(3vmin, 8px) !important;
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            transition: transform 0.2s ease !important;
+        }
+        .pip-control-icon:hover {
+            transform: scale(1.1) !important;
+        }
+        .pip-control-icon i { font-size: min(12vmin, 2.8rem) !important; color: white !important; }
+        .pip-control-icon span { 
+            font-weight: 600 !important; 
+            text-transform: uppercase !important; 
+            letter-spacing: 1.5px !important;
+            font-size: min(3vmin, 0.65rem) !important;
+        }
+
+        /* Responsive Layout for Short Windows or narrow windows */
+        @media (max-height: 160px), (max-width: 200px) {
+            .progress-ring {
+                display: none !important;
+            }
+            .timer-display {
+                width: 100vw !important;
+                height: 100vh !important;
+            }
+            .time {
+                font-size: min(40vh, 20vw, 4rem) !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            #current-task-display {
+                font-size: min(15vh, 8vw, 1.2rem) !important;
+                margin: 0 !important;
+            }
+        }
+    `;
     targetDoc.head.appendChild(pipStyle);
 }
 
