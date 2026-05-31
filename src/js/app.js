@@ -153,6 +153,7 @@ function init() {
     applyTheme();
     updateVolume();
     loadTasks();
+    updateActiveTaskDisplay();
     updateStatsUI();
     setMode('pomodoro');
     initPiP();
