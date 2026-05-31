@@ -28,6 +28,7 @@ export function saveTasks() {
 }
 
 export function addTask(title, estPomodoros) {
+    title = title.substring(0, 200);
     const isFirstTask = state.tasks.length === 0;
     const taskId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
     const newTask = {
@@ -96,69 +97,90 @@ export function updateTaskPomodoros() {
 }
 
 export function renderTasks() {
-    elements.taskList.innerHTML = '';
     if (state.tasks.length === 0) {
         elements.taskList.innerHTML = `<div style="text-align: center; color: var(--clr-text-muted); font-size: 0.9rem; padding: 1rem 0;">No tasks yet. Add one above!</div>`;
         return;
     }
-    state.tasks.forEach(task => {
-        const item = document.createElement('div');
-        item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
 
-        // Sanitize task title to prevent XSS
+    const emptyMsg = elements.taskList.querySelector('div[style]');
+    if (emptyMsg) emptyMsg.remove();
+
+    const existingElements = Array.from(elements.taskList.children);
+    const existingMap = new Map();
+    existingElements.forEach(el => {
+        const checkBtn = el.querySelector('[data-action="toggle"]');
+        if (checkBtn && checkBtn.dataset.id) {
+            existingMap.set(checkBtn.dataset.id, el);
+        } else {
+            el.remove();
+        }
+    });
+
+    let currentSibling = null;
+
+    state.tasks.forEach(task => {
+        let item = existingMap.get(task.id);
         const tempDiv = document.createElement('div');
         tempDiv.textContent = task.title;
         const sanitizedTitle = tempDiv.innerHTML;
+        const statsText = `${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}`;
 
-        item.innerHTML = `
-            <div class="task-check" data-action="toggle" data-id="${task.id}" title="Toggle completion">
-                <i class="fa-solid fa-check"></i>
-            </div>
-            <div class="task-content" data-action="activate" data-id="${task.id}" draggable="true">
-                <div class="task-text">${sanitizedTitle}</div>
-                <div class="task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
-            </div>
-            <div class="task-actions">
-                <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}" title="Delete Task">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
-            </div>
-        `;
+        if (!item) {
+            item = document.createElement('div');
+            item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
+            item.innerHTML = `
+                <div class="task-check" data-action="toggle" data-id="${task.id}" title="Toggle completion">
+                    <svg viewBox="0 0 448 512" width="14" height="14" fill="currentColor"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
+                </div>
+                <div class="task-content" data-action="activate" data-id="${task.id}" draggable="true">
+                    <div class="task-text">${sanitizedTitle}</div>
+                    <div class="task-stats">${statsText}</div>
+                </div>
+                <div class="task-actions">
+                    <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}" title="Delete Task">
+                        <svg viewBox="0 0 448 512" width="14" height="14" fill="currentColor"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"/></svg>
+                    </button>
+                </div>
+            `;
+            const content = item.querySelector('.task-content');
+            content.addEventListener('dragstart', (e) => {
+                item.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', task.id);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            content.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
+            });
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                item.classList.add('drag-over');
+            });
+            item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData('text/plain');
+                if (draggedId !== task.id) reorderTasks(draggedId, task.id);
+            });
+        } else {
+            item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
+            const textEl = item.querySelector('.task-text');
+            if (textEl.innerHTML !== sanitizedTitle) textEl.innerHTML = sanitizedTitle;
+            const statsEl = item.querySelector('.task-stats');
+            if (statsEl.textContent !== statsText) statsEl.textContent = statsText;
+            existingMap.delete(task.id);
+        }
 
-        // DRAG & DROP LOGIC
-        const content = item.querySelector('.task-content');
-
-        content.addEventListener('dragstart', (e) => {
-            item.classList.add('dragging');
-            e.dataTransfer.setData('text/plain', task.id);
-            e.dataTransfer.effectAllowed = 'move';
-        });
-
-        content.addEventListener('dragend', () => {
-            item.classList.remove('dragging');
-            document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
-        });
-
-        item.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            item.classList.add('drag-over');
-        });
-
-        item.addEventListener('dragleave', () => {
-            item.classList.remove('drag-over');
-        });
-
-        item.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const draggedId = e.dataTransfer.getData('text/plain');
-            if (draggedId !== task.id) {
-                reorderTasks(draggedId, task.id);
-            }
-        });
-
-        elements.taskList.appendChild(item);
+        if (!currentSibling) {
+            if (elements.taskList.firstChild !== item) elements.taskList.prepend(item);
+        } else {
+            if (currentSibling.nextSibling !== item) currentSibling.after(item);
+        }
+        currentSibling = item;
     });
+
+    existingMap.forEach(item => item.remove());
 }
 
 function reorderTasks(draggedId, targetId) {

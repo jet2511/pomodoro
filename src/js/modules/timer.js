@@ -1,6 +1,7 @@
 import { state, notifyStateChange } from './state.js';
 import { elements } from './elements.js';
 import { toggleBackgroundSound, playAlarm } from './audio.js';
+import { customConfirm } from './utils.js';
 
 let sessionStartTime = null;
 let sessionAccumulatedMs = 0;
@@ -64,9 +65,10 @@ function getModeName(mode) {
     }
 }
 
-export function setMode(mode) {
+export async function setMode(mode) {
     if (state.isRunning) {
-        if (!confirm('Timer is running. Are you sure you want to switch modes?')) {
+        const wantsToSwitch = await customConfirm('Timer is running. Are you sure you want to switch modes?');
+        if (!wantsToSwitch) {
             elements.modeBtns.forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === state.mode);
             });
@@ -102,10 +104,10 @@ function updateStatusText() {
     }
 }
 
-function startTimer() {
+async function startTimer() {
     if (state.mode === 'pomodoro' && !state.activeTaskId) {
         if (timerEvents.onPomodoroStart) {
-            const shouldContinue = timerEvents.onPomodoroStart();
+            const shouldContinue = await timerEvents.onPomodoroStart();
             if (!shouldContinue) return; // Start aborted
         }
     }
@@ -181,16 +183,20 @@ function stopTimer(completed = false) {
     }
 }
 
-export function toggleTimer() {
+export async function toggleTimer() {
     if (state.isRunning) {
         stopTimer();
     } else {
-        startTimer();
+        await startTimer();
     }
 }
 
-export function skipPhase() {
-    stopTimer(true);
+export async function skipPhase() {
+    if (state.isRunning) {
+        const wantsToSkip = await customConfirm("Are you sure you want to skip the current phase?");
+        if (!wantsToSkip) return;
+    }
+    // handleTimerComplete already calls stopTimer(true)
     handleTimerComplete(true);
 }
 

@@ -8,19 +8,19 @@ import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth.js';
 import { syncDataToCloud } from './modules/sync.js';
 import { updateStatsUI } from './modules/stats.js';
 import { initPiP, togglePiP, updateActiveTaskDisplay } from './modules/pip.js';
-import { isUserTyping, debounce, trapFocus } from './modules/utils.js';
+import { isUserTyping, debounce, trapFocus, customConfirm } from './modules/utils.js';
 
-// Setup Event Bridges
+// Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
     updateTaskPomodoros();
     updateStatsUI();
 };
 
-timerEvents.onPomodoroStart = () => {
+timerEvents.onPomodoroStart = async () => {
     const task = getFirstIncompleteTask();
     
     if (task) {
-        const wantsToSelect = confirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
+        const wantsToSelect = await customConfirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
         if (wantsToSelect) {
             setActiveTask(task.id);
         }
@@ -153,9 +153,11 @@ function init() {
     applyTheme();
     updateVolume();
     loadTasks();
+    updateActiveTaskDisplay();
     updateStatsUI();
     setMode('pomodoro');
     initPiP();
+    if (window.lucide) window.lucide.createIcons();
 
     // Centralized Syncing
     const debouncedSync = debounce(() => {

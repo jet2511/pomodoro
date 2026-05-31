@@ -59,20 +59,25 @@ export async function togglePiP() {
                 const originalTaskParent = pipTaskEl ? taskLabelInitialParent(pipTaskEl) : null;
                 const originalTaskSibling = pipTaskEl ? pipTaskEl.nextSibling : null;
                 
-                // We no longer move the task display inside the timer.
-                // It remains below the controls (which are hidden), so it sits under the timer.
-
+                // Move task label inside the circular timer
+                if (pipTaskEl && timerDisplay) {
+                    timerDisplay.appendChild(pipTaskEl);
+                }
                 // Create the hover overlay using PiP document context
                 const overlay = pipWindow.document.createElement('div');
                 overlay.id = 'pip-overlay';
                 overlay.className = 'pip-overlay hidden';
+                const playSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                const pauseSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                const skipSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>`;
+
                 overlay.innerHTML = `
                     <div class="pip-control-icon play-pause-btn">
-                        <i class="fa-solid ${state.isRunning ? 'fa-pause' : 'fa-play'}"></i>
+                        ${state.isRunning ? pauseSvg : playSvg}
                         <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
                     </div>
                     <div class="pip-control-icon skip-btn">
-                        <i class="fa-solid fa-forward-step"></i>
+                        ${skipSvg}
                         <span class="pip-control-label">Skip</span>
                     </div>
                 `;
@@ -91,11 +96,15 @@ export async function togglePiP() {
                         }
                     }
                     
-                    const iconEl = overlay.querySelector('.play-pause-btn i');
-                    const labelEl = overlay.querySelector('.play-pause-btn .pip-control-label');
-                    if (iconEl && labelEl) {
-                        iconEl.className = `fa-solid ${state.isRunning ? 'fa-pause' : 'fa-play'}`;
-                        labelEl.textContent = state.isRunning ? 'Stop' : 'Resume';
+                    const playPauseBtn = overlay.querySelector('.play-pause-btn');
+                    if (playPauseBtn) {
+                        const playSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                        const pauseSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                        
+                        playPauseBtn.innerHTML = `
+                            ${state.isRunning ? pauseSvg : playSvg}
+                            <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
+                        `;
                     }
                     
                     updateActiveTaskDisplay();
@@ -127,12 +136,51 @@ export async function togglePiP() {
                     skipPhase();
                 });
 
+                const showActionFeedback = (action) => {
+                    const feedback = pipWindow.document.createElement('div');
+                    feedback.className = 'pip-action-feedback';
+                    
+                    let svg = '';
+                    let text = '';
+                    
+                    if (action === 'play') {
+                        svg = playSvg;
+                        text = 'Resume';
+                    } else if (action === 'pause') {
+                        svg = pauseSvg;
+                        text = 'Stop';
+                    } else if (action === 'skip') {
+                        svg = skipSvg;
+                        text = 'Skip';
+                    }
+
+                    feedback.innerHTML = `
+                        <div class="icon">${svg}</div>
+                        <div class="text">${text}</div>
+                    `;
+                    pipWindow.document.body.appendChild(feedback);
+                    
+                    requestAnimationFrame(() => {
+                        feedback.classList.add('show');
+                        setTimeout(() => {
+                            feedback.classList.remove('show');
+                            setTimeout(() => feedback.remove(), 300);
+                        }, 600);
+                    });
+                };
+
                 pipWindow.document.addEventListener('keydown', (e) => {
                     if (e.code === 'Space') {
                         e.preventDefault();
-                        import('./timer.js').then(m => m.toggleTimer());
+                        import('./timer.js').then(m => {
+                            m.toggleTimer();
+                            showActionFeedback(state.isRunning ? 'play' : 'pause');
+                        });
                     } else if (e.key.toLowerCase() === 's') {
-                        import('./timer.js').then(m => m.skipPhase());
+                        import('./timer.js').then(m => {
+                            m.skipPhase();
+                            showActionFeedback('skip');
+                        });
                     } else if (e.key.toLowerCase() === 'p') {
                         pipWindow.close();
                     }
@@ -145,7 +193,11 @@ export async function togglePiP() {
                     taskObserver.disconnect();
                     
                     if (pipTaskEl && originalTaskParent) {
-                        originalTaskParent.appendChild(pipTaskEl);
+                        if (originalTaskSibling) {
+                            originalTaskParent.insertBefore(pipTaskEl, originalTaskSibling);
+                        } else {
+                            originalTaskParent.appendChild(pipTaskEl);
+                        }
                     }
 
                     if (timerParent && adoptedSection) {
@@ -224,8 +276,11 @@ function copyStyles(targetWindow) {
         .timer-section {
             width: 100% !important; 
             height: 100% !important;
-            display: grid !important; 
-            place-items: center !important;
+            display: flex !important; 
+            flex-direction: column !important;
+            justify-content: center !important; 
+            align-items: center !important;
+            gap: 1vmin !important;
             margin: 0 !important; 
             padding: 0 !important;
             background: transparent !important; 
@@ -245,6 +300,7 @@ function copyStyles(targetWindow) {
             flex-direction: column !important;
             justify-content: center !important; 
             align-items: center !important;
+            gap: 2.5vmin !important;
             background: transparent !important;
             border: none !important;
             margin: 0 !important;
@@ -273,7 +329,7 @@ function copyStyles(targetWindow) {
             font-weight: 700 !important; 
             line-height: 1 !important;
             margin: 0 !important;
-            padding-bottom: 6px !important;
+            padding: 0 !important;
             z-index: 10 !important;
             letter-spacing: -1.5px !important;
         }
@@ -281,7 +337,7 @@ function copyStyles(targetWindow) {
         #current-task-display {
             font-size: min(4.5vmin, 0.85rem) !important; 
             max-width: 85% !important;
-            margin-top: min(1.5vmin, 5px) !important;
+            margin: 0 !important;
             display: none !important;
         }
         #current-task-display.has-task {
@@ -294,14 +350,14 @@ function copyStyles(targetWindow) {
             left: 0 !important;
             width: 100% !important; 
             height: 100% !important;
-            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 30%, transparent 100%) !important;
+            background: rgba(0,0,0,0.6) !important;
             display: flex !important; 
             flex-direction: row !important;
             flex-wrap: wrap !important;
             justify-content: center !important; 
-            align-items: flex-end !important;
+            align-items: center !important;
             gap: min(8vmin, 20px) !important;
-            padding-bottom: min(10vmin, 24px) !important;
+            padding: 0 !important;
             z-index: 1000 !important;
             transition: opacity 0.2s ease !important;
             min-width: 0 !important;
@@ -328,8 +384,44 @@ function copyStyles(targetWindow) {
             font-size: min(3vmin, 0.65rem) !important;
         }
 
-        /* Responsive Layout for Short Windows */
-        @media (max-height: 160px) {
+        /* Action Feedback Animation */
+        .pip-action-feedback {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) scale(0.8) !important;
+            background: rgba(0, 0, 0, 0.65) !important;
+            color: white !important;
+            padding: min(4vmin, 15px) min(6vmin, 25px) !important;
+            border-radius: 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: min(2vmin, 8px) !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            z-index: 2000 !important;
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+        }
+        .pip-action-feedback.show {
+            opacity: 1 !important;
+            transform: translate(-50%, -50%) scale(1) !important;
+        }
+        .pip-action-feedback .icon svg {
+            width: min(10vmin, 40px) !important;
+            height: min(10vmin, 40px) !important;
+        }
+        .pip-action-feedback .text {
+            font-size: min(3.5vmin, 14px) !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+        }
+
+        /* Responsive Layout for Short Windows or narrow windows */
+        @media (max-height: 160px), (max-width: 200px) {
             .progress-ring {
                 display: none !important;
             }
@@ -338,12 +430,13 @@ function copyStyles(targetWindow) {
                 height: 100vh !important;
             }
             .time {
-                font-size: min(40vh, 4rem) !important;
-                margin-top: 0 !important;
+                font-size: min(40vh, 20vw, 4rem) !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             #current-task-display {
-                font-size: min(15vh, 1.2rem) !important;
-                margin-top: 5px !important;
+                font-size: min(15vh, 8vw, 1.2rem) !important;
+                margin: 0 !important;
             }
         }
     `;

@@ -107,28 +107,7 @@
     outline: none;
 }
 
-.est-pomodoros label {
-    font-size: 0.8rem;
-    color: var(--clr-text-muted);
-}
 
-.est-pomodoros input {
-    width: 40px;
-    background: transparent;
-    border: none;
-    color: var(--clr-text);
-    font-weight: bold;
-    text-align: center;
-    padding: 0.75rem 0;
-}
-
-.est-pomodoros input:focus {
-    outline: none;
-}
-
-.est-pomodoros-inline input:focus {
-    outline: none;
-}
 
 .add-btn {
     background: rgba(0, 0, 0, 0.2);
@@ -182,17 +161,7 @@
     min-height: 50px;
 }
 
-.task-list:empty::before {
-    content: 'Add your first task to get started';
-    display: block;
-    text-align: center;
-    padding: 2rem 1rem;
-    color: var(--clr-text-muted);
-    font-size: 0.9rem;
-    border: 2px dashed var(--glass-border);
-    border-radius: 12px;
-    background: rgba(0,0,0,0.05);
-}
+
 
 .task-item {
     background: var(--glass-bg);
@@ -355,9 +324,7 @@ body.mode-longBreak .task-item.completed .task-check {
         flex-direction: column;
     }
 
-    .est-pomodoros {
-        justify-content: space-between;
-    }
+
 
     .add-btn {
         width: 100%;

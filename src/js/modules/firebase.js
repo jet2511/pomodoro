@@ -1,7 +1,3 @@
-import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-
 // Placeholder Firebase Configuration
 // USER MUST REPLACE THIS WITH THEIR ACTUAL CONFIG
 const firebaseConfig = {
@@ -15,19 +11,24 @@ const firebaseConfig = {
 
 let app, auth, db, googleProvider;
 
-export function initFirebase() {
+export async function initFirebase() {
+    if (app) return;
     try {
+        const [{ initializeApp }, { getAuth, GoogleAuthProvider }, { getFirestore }] = await Promise.all([
+            import("firebase/app"),
+            import("firebase/auth"),
+            import("firebase/firestore")
+        ]);
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
         db = getFirestore(app);
         googleProvider = new GoogleAuthProvider();
-        console.log("Firebase modular SDK initialized.");
+        console.log("Firebase modular SDK initialized (Lazy Loaded).");
     } catch (e) {
         console.error("Firebase initialization failed:", e);
     }
 }
 
-export function getAppRef() { return app; }
 export function getAuthRef() { return auth; }
 export function getDbRef() { return db; }
 export function getGoogleProviderRef() { return googleProvider; }
