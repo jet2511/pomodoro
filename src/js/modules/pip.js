@@ -174,11 +174,13 @@ export async function togglePiP() {
                         e.preventDefault();
                         import('./timer.js').then(m => {
                             m.toggleTimer();
+                            updateUI();
                             showActionFeedback(state.isRunning ? 'play' : 'pause');
                         });
                     } else if (e.key.toLowerCase() === 's') {
                         import('./timer.js').then(m => {
                             m.skipPhase();
+                            updateUI();
                             showActionFeedback('skip');
                         });
                     } else if (e.key.toLowerCase() === 'p') {
