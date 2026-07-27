@@ -168,6 +168,7 @@ function stopTimer(completed = false) {
         sessionStartTime = null;
     }
 
+    targetEndTime = null;
     state.isRunning = false;
     elements.mainBtn.textContent = 'Start';
     elements.mainBtn.setAttribute('aria-label', 'Start Timer');
@@ -215,7 +216,7 @@ function handleTimerComplete(isSkipped = false) {
             state.pomodorosCompleted++;
 
             // Record Analytics
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toLocaleDateString('en-CA');
             if (!state.focusHistory[today]) {
                 state.focusHistory[today] = { seconds: 0, pomodoros: 0 };
             }
