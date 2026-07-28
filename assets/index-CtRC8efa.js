@@ -569,7 +569,7 @@ function saveTasks() {
 function addTask(title, estPomodoros) {
   title = title.substring(0, 200);
   const isFirstTask = state.tasks.length === 0;
-  const taskId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const taskId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
   const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
   const newTask = {
     id: taskId,
@@ -670,15 +670,17 @@ function renderTasks() {
                     </button>
                 </div>
             `;
-      const content = item.querySelector('.task-content');
-      content.addEventListener('dragstart', e => {
-        if (item && e.dataTransfer) {
-          item.classList.add('dragging');
-          e.dataTransfer.setData('text/plain', task.id);
+      item.setAttribute('data-task-id', task.id);
+      item.addEventListener('dragstart', e => {
+        if (item) item.classList.add('dragging');
+        if (e && e.dataTransfer) {
+          try {
+            e.dataTransfer.setData('text/plain', task.id);
+          } catch (_) {}
           e.dataTransfer.effectAllowed = 'move';
         }
       });
-      content.addEventListener('dragend', () => {
+      item.addEventListener('dragend', () => {
         if (item) {
           item.classList.remove('dragging');
           document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
@@ -686,8 +688,8 @@ function renderTasks() {
       });
       item.addEventListener('dragover', e => {
         e.preventDefault();
-        if (e.dataTransfer && item) {
-          e.dataTransfer.dropEffect = 'move';
+        if (item) {
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
           item.classList.add('drag-over');
         }
       });
@@ -696,10 +698,17 @@ function renderTasks() {
       });
       item.addEventListener('drop', e => {
         e.preventDefault();
+        let draggedId = '';
         if (e.dataTransfer) {
-          const draggedId = e.dataTransfer.getData('text/plain');
-          if (draggedId !== task.id) reorderTasks(draggedId, task.id);
+          try {
+            draggedId = e.dataTransfer.getData('text/plain');
+          } catch (_) {}
         }
+        if (!draggedId) {
+          const draggingEl = document.querySelector('.task-item.dragging');
+          if (draggingEl) draggedId = draggingEl.getAttribute('data-task-id') || '';
+        }
+        if (draggedId && draggedId !== task.id) reorderTasks(draggedId, task.id);
       });
     } else {
       item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
@@ -831,7 +840,7 @@ const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/pom
 const env = {};
 const firebaseConfig = {
   apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyBquo9eoROYOBPujh_tiZBjw0OjZbPQCS4",
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "pomodoro-web-1dc50.firebaseapp.com",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || (typeof window !== "undefined" && window.location.hostname === "localhost" ? window.location.host : "pomodoro-web-1dc50.firebaseapp.com"),
   projectId: env.VITE_FIREBASE_PROJECT_ID || "pomodoro-web-1dc50",
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "pomodoro-web-1dc50.firebasestorage.app",
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "944405715848",
