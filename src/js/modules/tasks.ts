@@ -1,15 +1,16 @@
-import { state, notifyStateChange } from './state.js';
-import { elements } from './elements.js';
+import { state, notifyStateChange } from './state';
+import { elements } from './elements';
+import { Task } from '../types/index';
 
 export const taskEvents = {
     onTaskActivated: () => { }
 };
 
-export function getFirstIncompleteTask() {
+export function getFirstIncompleteTask(): Task | null {
     return state.tasks.find(t => !t.isCompleted) || null;
 }
 
-export function loadTasks() {
+export function loadTasks(): void {
     const saved = localStorage.getItem('pomodoro_tasks');
     if (saved) {
         try {
@@ -23,18 +24,19 @@ export function loadTasks() {
     }
 }
 
-export function saveTasks() {
+export function saveTasks(): void {
     localStorage.setItem('pomodoro_tasks', JSON.stringify(state.tasks));
 }
 
-export function addTask(title, estPomodoros) {
+export function addTask(title: string, estPomodoros: string | number): void {
     title = title.substring(0, 200);
     const isFirstTask = state.tasks.length === 0;
     const taskId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const newTask = {
+    const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
+    const newTask: Task = {
         id: taskId,
         title,
-        estPomodoros: Math.min(100, Math.max(1, parseInt(estPomodoros) || 1)),
+        estPomodoros: Math.min(100, Math.max(1, est || 1)),
         actualPomodoros: 0,
         isCompleted: false,
         isActive: isFirstTask
@@ -46,7 +48,7 @@ export function addTask(title, estPomodoros) {
     notifyStateChange();
 }
 
-export function toggleTaskComplete(id) {
+export function toggleTaskComplete(id: string): void {
     const task = state.tasks.find(t => t.id === id);
     if (task) {
         task.isCompleted = !task.isCompleted;
@@ -60,7 +62,7 @@ export function toggleTaskComplete(id) {
     }
 }
 
-export function setActiveTask(id) {
+export function setActiveTask(id: string): void {
     const task = state.tasks.find(t => t.id === id);
     if (task && !task.isCompleted) {
         state.tasks.forEach(t => t.isActive = false);
@@ -74,7 +76,7 @@ export function setActiveTask(id) {
     }
 }
 
-export function deleteTask(id) {
+export function deleteTask(id: string): void {
     state.tasks = state.tasks.filter(t => t.id !== id);
     if (state.activeTaskId === id) {
         state.activeTaskId = null;
@@ -84,7 +86,7 @@ export function deleteTask(id) {
     notifyStateChange();
 }
 
-export function updateTaskPomodoros() {
+export function updateTaskPomodoros(): void {
     if (!state.activeTaskId) return;
 
     const task = state.tasks.find(t => t.id === state.activeTaskId);
@@ -96,7 +98,7 @@ export function updateTaskPomodoros() {
     }
 }
 
-export function renderTasks() {
+export function renderTasks(): void {
     if (state.tasks.length === 0) {
         elements.taskList.innerHTML = `<div style="text-align: center; color: var(--clr-text-muted); font-size: 0.9rem; padding: 1rem 0;">No tasks yet. Add one above!</div>`;
         return;
@@ -106,9 +108,9 @@ export function renderTasks() {
     if (emptyMsg) emptyMsg.remove();
 
     const existingElements = Array.from(elements.taskList.children);
-    const existingMap = new Map();
+    const existingMap = new Map<string, Element>();
     existingElements.forEach(el => {
-        const checkBtn = el.querySelector('[data-action="toggle"]');
+        const checkBtn = el.querySelector('[data-action="toggle"]') as HTMLElement | null;
         if (checkBtn && checkBtn.dataset.id) {
             existingMap.set(checkBtn.dataset.id, el);
         } else {
@@ -116,10 +118,10 @@ export function renderTasks() {
         }
     });
 
-    let currentSibling = null;
+    let currentSibling: Element | null = null;
 
     state.tasks.forEach(task => {
-        let item = existingMap.get(task.id);
+        let item = existingMap.get(task.id) as HTMLElement | undefined;
         const tempDiv = document.createElement('div');
         tempDiv.textContent = task.title;
         const sanitizedTitle = tempDiv.innerHTML;
@@ -142,32 +144,42 @@ export function renderTasks() {
                     </button>
                 </div>
             `;
-            const content = item.querySelector('.task-content');
-            content.addEventListener('dragstart', (e) => {
-                item.classList.add('dragging');
-                e.dataTransfer.setData('text/plain', task.id);
-                e.dataTransfer.effectAllowed = 'move';
+            const content = item.querySelector('.task-content') as HTMLElement;
+            content.addEventListener('dragstart', (e: DragEvent) => {
+                if (item && e.dataTransfer) {
+                    item.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', task.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                }
             });
             content.addEventListener('dragend', () => {
-                item.classList.remove('dragging');
-                document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
+                if (item) {
+                    item.classList.remove('dragging');
+                    document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
+                }
             });
-            item.addEventListener('dragover', (e) => {
+            item.addEventListener('dragover', (e: DragEvent) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                item.classList.add('drag-over');
+                if (e.dataTransfer && item) {
+                    e.dataTransfer.dropEffect = 'move';
+                    item.classList.add('drag-over');
+                }
             });
-            item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
-            item.addEventListener('drop', (e) => {
+            item.addEventListener('dragleave', () => {
+                if (item) item.classList.remove('drag-over');
+            });
+            item.addEventListener('drop', (e: DragEvent) => {
                 e.preventDefault();
-                const draggedId = e.dataTransfer.getData('text/plain');
-                if (draggedId !== task.id) reorderTasks(draggedId, task.id);
+                if (e.dataTransfer) {
+                    const draggedId = e.dataTransfer.getData('text/plain');
+                    if (draggedId !== task.id) reorderTasks(draggedId, task.id);
+                }
             });
         } else {
             item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
-            const textEl = item.querySelector('.task-text');
+            const textEl = item.querySelector('.task-text') as HTMLElement;
             if (textEl.innerHTML !== sanitizedTitle) textEl.innerHTML = sanitizedTitle;
-            const statsEl = item.querySelector('.task-stats');
+            const statsEl = item.querySelector('.task-stats') as HTMLElement;
             if (statsEl.textContent !== statsText) statsEl.textContent = statsText;
             existingMap.delete(task.id);
         }
@@ -183,7 +195,7 @@ export function renderTasks() {
     existingMap.forEach(item => item.remove());
 }
 
-function reorderTasks(draggedId, targetId) {
+function reorderTasks(draggedId: string, targetId: string): void {
     const draggedIndex = state.tasks.findIndex(t => t.id === draggedId);
     const targetIndex = state.tasks.findIndex(t => t.id === targetId);
 

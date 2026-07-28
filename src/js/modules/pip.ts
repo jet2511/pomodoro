@@ -1,21 +1,33 @@
-import { elements } from './elements.js';
-import { state } from './state.js';
+import { state } from './state';
+import { toggleTimer, skipPhase } from './timer';
 
-let pipWindow = null;
-let timerParent = null;
+let pipWindow: any = null;
+let timerParent: Node | null = null;
+let pipCleanups: Array<() => void> = [];
 
-export function isPiPSupported() {
+export function isPiPSupported(): boolean {
     return 'documentPictureInPicture' in window;
 }
 
-export function initPiP() {
+export function initPiP(): void {
     if (isPiPSupported()) {
         const pipBtn = document.getElementById('pip-btn');
         if (pipBtn) pipBtn.style.display = 'block';
     }
 }
 
-export async function togglePiP() {
+function runPipCleanups(): void {
+    pipCleanups.forEach(cleanup => {
+        try {
+            cleanup();
+        } catch (e) {
+            console.error('PiP cleanup error:', e);
+        }
+    });
+    pipCleanups = [];
+}
+
+export async function togglePiP(): Promise<void> {
     if (pipWindow) {
         pipWindow.close();
         return;
@@ -27,7 +39,7 @@ export async function togglePiP() {
 
         console.log('PiP: Requesting window...');
         // Request a 20% smaller 1:1 square window (240x240)
-        pipWindow = await window.documentPictureInPicture.requestWindow({
+        pipWindow = await (window as any).documentPictureInPicture.requestWindow({
             width: 240,
             height: 240,
         });
@@ -48,9 +60,9 @@ export async function togglePiP() {
                 pipWindow.document.body.classList.add('pip-body');
 
                 // Move task label inside the circular timer
-                const pipTaskEl = adoptedSection.querySelector('#current-task-display');
-                const timerDisplay = adoptedSection.querySelector('.timer-display');
-                const svgElement = adoptedSection.querySelector('.progress-ring');
+                const pipTaskEl = adoptedSection.querySelector('#current-task-display') as HTMLElement | null;
+                const timerDisplay = adoptedSection.querySelector('.timer-display') as HTMLElement | null;
+                const svgElement = adoptedSection.querySelector('.progress-ring') as SVGElement | null;
                 
                 if (svgElement && !svgElement.getAttribute('viewBox')) {
                     svgElement.setAttribute('viewBox', '0 0 250 250');
@@ -96,13 +108,13 @@ export async function togglePiP() {
                         }
                     }
                     
-                    const playPauseBtn = overlay.querySelector('.play-pause-btn');
+                    const playPauseBtn = overlay.querySelector('.play-pause-btn') as HTMLElement | null;
                     if (playPauseBtn) {
-                        const playSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-                        const pauseSvg = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                        const playSvg2 = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                        const pauseSvg2 = `<svg viewBox="0 0 24 24" width="min(12vmin, 2.8rem)" height="min(12vmin, 2.8rem)" stroke="currentColor" stroke-width="2" fill="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
                         
                         playPauseBtn.innerHTML = `
-                            ${state.isRunning ? pauseSvg : playSvg}
+                            ${state.isRunning ? pauseSvg2 : playSvg2}
                             <span class="pip-control-label">${state.isRunning ? 'Stop' : 'Resume'}</span>
                         `;
                     }
@@ -112,32 +124,52 @@ export async function togglePiP() {
 
                 const observer = new MutationObserver(updateUI);
                 observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+                pipCleanups.push(() => observer.disconnect());
 
                 const taskObserver = new MutationObserver(updateActiveTaskDisplay);
                 const taskList = document.getElementById('task-list');
-                if (taskList) taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
+                if (taskList) {
+                    taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
+                    pipCleanups.push(() => taskObserver.disconnect());
+                }
 
-                pipWindow.document.body.addEventListener('mouseenter', () => overlay.classList.remove('hidden'));
-                pipWindow.document.body.addEventListener('mouseleave', () => overlay.classList.add('hidden'));
+                const targetDoc = pipWindow.document;
+                const targetBody = pipWindow.document.body;
+
+                const mouseEnterHandler = () => overlay.classList.remove('hidden');
+                const mouseLeaveHandler = () => overlay.classList.add('hidden');
+                targetBody.addEventListener('mouseenter', mouseEnterHandler);
+                targetBody.addEventListener('mouseleave', mouseLeaveHandler);
+                pipCleanups.push(() => {
+                    targetBody.removeEventListener('mouseenter', mouseEnterHandler);
+                    targetBody.removeEventListener('mouseleave', mouseLeaveHandler);
+                });
                 
-                const playPauseBtn = overlay.querySelector('.play-pause-btn');
-                const skipBtn = overlay.querySelector('.skip-btn');
+                const playPauseBtn = overlay.querySelector('.play-pause-btn') as HTMLElement;
+                const skipBtn = overlay.querySelector('.skip-btn') as HTMLElement;
                 
-                playPauseBtn.addEventListener('click', async (e) => {
+                const playPauseClick = (e: Event) => {
                     e.stopPropagation();
-                    const { toggleTimer } = await import('./timer.js');
                     toggleTimer();
                     updateUI();
+                };
+                playPauseBtn.addEventListener('click', playPauseClick);
+                pipCleanups.push(() => {
+                    if (playPauseBtn) playPauseBtn.removeEventListener('click', playPauseClick);
                 });
 
-                skipBtn.addEventListener('click', async (e) => {
+                const skipClick = (e: Event) => {
                     e.stopPropagation();
-                    const { skipPhase } = await import('./timer.js');
                     skipPhase();
+                };
+                skipBtn.addEventListener('click', skipClick);
+                pipCleanups.push(() => {
+                    if (skipBtn) skipBtn.removeEventListener('click', skipClick);
                 });
 
-                const showActionFeedback = (action) => {
-                    const feedback = pipWindow.document.createElement('div');
+                const showActionFeedback = (action: 'play' | 'pause' | 'skip') => {
+                    if (!pipWindow) return;
+                    const feedback = targetDoc.createElement('div');
                     feedback.className = 'pip-action-feedback';
                     
                     let svg = '';
@@ -158,7 +190,7 @@ export async function togglePiP() {
                         <div class="icon">${svg}</div>
                         <div class="text">${text}</div>
                     `;
-                    pipWindow.document.body.appendChild(feedback);
+                    targetBody.appendChild(feedback);
                     
                     requestAnimationFrame(() => {
                         feedback.classList.add('show');
@@ -169,30 +201,29 @@ export async function togglePiP() {
                     });
                 };
 
-                pipWindow.document.addEventListener('keydown', (e) => {
+                const keydownHandler = (e: KeyboardEvent) => {
                     if (e.code === 'Space') {
                         e.preventDefault();
-                        import('./timer.js').then(m => {
-                            m.toggleTimer();
-                            updateUI();
-                            showActionFeedback(state.isRunning ? 'play' : 'pause');
-                        });
+                        toggleTimer();
+                        updateUI();
+                        showActionFeedback(state.isRunning ? 'play' : 'pause');
                     } else if (e.key.toLowerCase() === 's') {
-                        import('./timer.js').then(m => {
-                            m.skipPhase();
-                            updateUI();
-                            showActionFeedback('skip');
-                        });
+                        skipPhase();
+                        updateUI();
+                        showActionFeedback('skip');
                     } else if (e.key.toLowerCase() === 'p') {
-                        pipWindow.close();
+                        if (pipWindow) pipWindow.close();
                     }
+                };
+                targetDoc.addEventListener('keydown', keydownHandler);
+                pipCleanups.push(() => {
+                    targetDoc.removeEventListener('keydown', keydownHandler);
                 });
 
                 pipWindow.addEventListener('pagehide', () => {
                     console.log('PiP: Closing and restoring...');
+                    runPipCleanups();
                     pipWindow = null;
-                    observer.disconnect();
-                    taskObserver.disconnect();
                     
                     if (pipTaskEl && originalTaskParent) {
                         if (originalTaskSibling) {
@@ -223,11 +254,11 @@ export async function togglePiP() {
 }
 
 // Helper to remember initial parent before move
-function taskLabelInitialParent(el) {
-    return el.parentNode;
+function taskLabelInitialParent(el: HTMLElement): ParentNode {
+    return el.parentNode as ParentNode;
 }
 
-function copyStyles(targetWindow) {
+function copyStyles(targetWindow: Window): void {
     const targetDoc = targetWindow.document;
 
     // Font Awesome
@@ -237,11 +268,11 @@ function copyStyles(targetWindow) {
     targetDoc.head.appendChild(faLink);
 
     // Main Styles
-    [...document.styleSheets].forEach((styleSheet) => {
+    Array.from(document.styleSheets).forEach((styleSheet) => {
         try {
             if (styleSheet.cssRules) {
                 const style = targetDoc.createElement('style');
-                const rules = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
+                const rules = Array.from(styleSheet.cssRules).map(rule => rule.cssText).join('');
                 style.textContent = rules;
                 targetDoc.head.appendChild(style);
             }
@@ -445,8 +476,8 @@ function copyStyles(targetWindow) {
     targetDoc.head.appendChild(pipStyle);
 }
 
-export function updateActiveTaskDisplay() {
-    let taskEl = null;
+export function updateActiveTaskDisplay(): void {
+    let taskEl: HTMLElement | null = null;
     if (pipWindow && !pipWindow.closed) {
         taskEl = pipWindow.document.getElementById('current-task-display');
     }

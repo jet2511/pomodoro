@@ -1,7 +1,7 @@
-import { state } from './state.js';
-import { elements } from './elements.js';
+import { state } from './state';
+import { elements } from './elements';
 
-export function updateStatsUI() {
+export function updateStatsUI(): void {
     const today = new Date().toLocaleDateString('en-CA');
     const todayData = state.focusHistory[today] || { seconds: 0, pomodoros: 0 };
 
@@ -12,6 +12,6 @@ export function updateStatsUI() {
     const hours = Math.floor(todayData.seconds / 3600);
     const minutes = Math.floor((todayData.seconds % 3600) / 60);
 
-    elements.statTotalPomodoros.textContent = totalPomodoros;
+    elements.statTotalPomodoros.textContent = String(totalPomodoros);
     elements.statTodayTime.textContent = `${hours}h ${minutes}m`;
 }

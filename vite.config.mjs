@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import babel from 'vite-plugin-babel';
 
 export default defineConfig({
-  // Base path for GitHub Pages deployment
-  // Replace 'pomodoro' with your actual repository name if different
   base: '/pomodoro/',
+  // Disable esbuild transformer — use Babel (pure JS) instead to avoid spawn EPERM on Windows sandbox
+  esbuild: false,
   plugins: [
+    babel({
+      babelConfig: {
+        presets: ['@babel/preset-typescript'],
+      },
+      include: [/\.[jt]sx?$/],
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png', 'audio/*.mp3'],
@@ -36,5 +43,10 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     target: 'es2015',
+  },
+  optimizeDeps: {
+    // Disable esbuild-based dependency pre-bundling (not needed in dev when deps are already ESM)
+    noDiscovery: true,
+    include: [],
   }
 });
