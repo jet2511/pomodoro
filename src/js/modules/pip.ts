@@ -1,4 +1,5 @@
 import { state } from './state';
+import { toggleTimer, skipPhase } from './timer';
 
 let pipWindow: any = null;
 let timerParent: Node | null = null;
@@ -132,23 +133,23 @@ export async function togglePiP(): Promise<void> {
                     pipCleanups.push(() => taskObserver.disconnect());
                 }
 
+                const targetDoc = pipWindow.document;
+                const targetBody = pipWindow.document.body;
+
                 const mouseEnterHandler = () => overlay.classList.remove('hidden');
                 const mouseLeaveHandler = () => overlay.classList.add('hidden');
-                pipWindow.document.body.addEventListener('mouseenter', mouseEnterHandler);
-                pipWindow.document.body.addEventListener('mouseleave', mouseLeaveHandler);
+                targetBody.addEventListener('mouseenter', mouseEnterHandler);
+                targetBody.addEventListener('mouseleave', mouseLeaveHandler);
                 pipCleanups.push(() => {
-                    if (pipWindow && pipWindow.document && pipWindow.document.body) {
-                        pipWindow.document.body.removeEventListener('mouseenter', mouseEnterHandler);
-                        pipWindow.document.body.removeEventListener('mouseleave', mouseLeaveHandler);
-                    }
+                    targetBody.removeEventListener('mouseenter', mouseEnterHandler);
+                    targetBody.removeEventListener('mouseleave', mouseLeaveHandler);
                 });
                 
                 const playPauseBtn = overlay.querySelector('.play-pause-btn') as HTMLElement;
                 const skipBtn = overlay.querySelector('.skip-btn') as HTMLElement;
                 
-                const playPauseClick = async (e: Event) => {
+                const playPauseClick = (e: Event) => {
                     e.stopPropagation();
-                    const { toggleTimer } = await import('./timer');
                     toggleTimer();
                     updateUI();
                 };
@@ -157,9 +158,8 @@ export async function togglePiP(): Promise<void> {
                     if (playPauseBtn) playPauseBtn.removeEventListener('click', playPauseClick);
                 });
 
-                const skipClick = async (e: Event) => {
+                const skipClick = (e: Event) => {
                     e.stopPropagation();
-                    const { skipPhase } = await import('./timer');
                     skipPhase();
                 };
                 skipBtn.addEventListener('click', skipClick);
@@ -169,7 +169,7 @@ export async function togglePiP(): Promise<void> {
 
                 const showActionFeedback = (action: 'play' | 'pause' | 'skip') => {
                     if (!pipWindow) return;
-                    const feedback = pipWindow.document.createElement('div');
+                    const feedback = targetDoc.createElement('div');
                     feedback.className = 'pip-action-feedback';
                     
                     let svg = '';
@@ -190,7 +190,7 @@ export async function togglePiP(): Promise<void> {
                         <div class="icon">${svg}</div>
                         <div class="text">${text}</div>
                     `;
-                    pipWindow.document.body.appendChild(feedback);
+                    targetBody.appendChild(feedback);
                     
                     requestAnimationFrame(() => {
                         feedback.classList.add('show');
@@ -204,32 +204,26 @@ export async function togglePiP(): Promise<void> {
                 const keydownHandler = (e: KeyboardEvent) => {
                     if (e.code === 'Space') {
                         e.preventDefault();
-                        import('./timer').then(m => {
-                            m.toggleTimer();
-                            updateUI();
-                            showActionFeedback(state.isRunning ? 'play' : 'pause');
-                        });
+                        toggleTimer();
+                        updateUI();
+                        showActionFeedback(state.isRunning ? 'play' : 'pause');
                     } else if (e.key.toLowerCase() === 's') {
-                        import('./timer').then(m => {
-                            m.skipPhase();
-                            updateUI();
-                            showActionFeedback('skip');
-                        });
+                        skipPhase();
+                        updateUI();
+                        showActionFeedback('skip');
                     } else if (e.key.toLowerCase() === 'p') {
                         if (pipWindow) pipWindow.close();
                     }
                 };
-                pipWindow.document.addEventListener('keydown', keydownHandler);
+                targetDoc.addEventListener('keydown', keydownHandler);
                 pipCleanups.push(() => {
-                    if (pipWindow && pipWindow.document) {
-                        pipWindow.document.removeEventListener('keydown', keydownHandler);
-                    }
+                    targetDoc.removeEventListener('keydown', keydownHandler);
                 });
 
                 pipWindow.addEventListener('pagehide', () => {
                     console.log('PiP: Closing and restoring...');
-                    pipWindow = null;
                     runPipCleanups();
+                    pipWindow = null;
                     
                     if (pipTaskEl && originalTaskParent) {
                         if (originalTaskSibling) {
