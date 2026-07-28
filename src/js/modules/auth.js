@@ -1,6 +1,10 @@
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
 import { setupRealtimeSync, unsubscribeRealtimeSync, syncEvents } from './sync.js';
+import { resetLocalState } from './state.js';
+import { renderTasks } from './tasks.js';
+import { updateStatsUI } from './stats.js';
+import { applySettingsToUI } from './settings.js';
 
 let currentUser = null;
 
@@ -76,6 +80,11 @@ function showLoggedOutView() {
     
     elements.authUsername.style.display = 'none';
     updateSyncUI('none');
+
+    resetLocalState();
+    renderTasks();
+    updateStatsUI();
+    applySettingsToUI();
 }
 
 function updateSyncUI(status) {
@@ -163,6 +172,7 @@ async function signOut() {
     if (!auth) return;
     const { signOut: firebaseSignOut } = await import("firebase/auth");
     try {
+        unsubscribeRealtimeSync();
         await firebaseSignOut(auth);
         toggleAuthModal(false);
     } catch (error) {

@@ -66,3 +66,25 @@ export function saveSettings() {
         focusHistory: state.focusHistory
     }));
 }
+
+export const DEFAULT_SETTINGS = {
+    pomodoro: 25,
+    shortBreak: 5,
+    longBreak: 15,
+    longBreakInterval: 4,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+    alarmSound: 'bell',
+    tickingSound: 'none',
+    volume: 50,
+    darkMode: true
+};
+
+export function resetLocalState() {
+    state.tasks = [];
+    state.activeTaskId = null;
+    state.settings = { ...DEFAULT_SETTINGS };
+    state.focusHistory = {};
+    localStorage.removeItem('pomodoro_tasks');
+    localStorage.removeItem('pomodoro_settings');
+}
