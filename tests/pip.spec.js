@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:5174/pomodoro/';
+const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://localhost:5174/pomodoro/';
 
 test.describe('PiP Shortcuts', () => {
     test.beforeEach(async ({ page }) => {
@@ -55,6 +55,13 @@ test.describe('PiP Shortcuts', () => {
         await page.evaluate(() => {
             const event = new KeyboardEvent('keydown', { key: 's' });
             window.pipTestingWindow.document.dispatchEvent(event);
+        });
+        
+        await page.waitForTimeout(100);
+        // Confirm skip modal if popped up
+        await page.evaluate(() => {
+            const okBtn = document.getElementById('confirm-ok-btn');
+            if (okBtn) okBtn.click();
         });
         
         await page.waitForTimeout(500);

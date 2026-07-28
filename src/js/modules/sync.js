@@ -5,6 +5,7 @@ import { saveTasks, renderTasks } from './tasks.js';
 import { applySettingsToUI, applyTheme } from './settings.js';
 import { updateVolume } from './audio.js';
 import { setMode } from './timer.js';
+import { updateStatsUI } from './stats.js';
 
 export const syncEvents = {
     onSyncStatusChange: () => { }
@@ -12,6 +13,7 @@ export const syncEvents = {
 
 let isSyncing = false;
 export let isLoadingFromCloud = false;
+let unsubscribeSnapshot = null;
 
 export async function syncDataToCloud(user) {
     if (!user || isSyncing || isLoadingFromCloud) return;
@@ -20,7 +22,7 @@ export async function syncDataToCloud(user) {
     const db = getDbRef();
     if (!db) {
         isSyncing = false;
-        return; // DB not initialized yet (missing real config)
+        return;
     }
     
     syncEvents.onSyncStatusChange('syncing');
@@ -43,81 +45,79 @@ export async function syncDataToCloud(user) {
     }
 }
 
-export async function loadDataFromCloud(user) {
-    if (!user || isLoadingFromCloud) return;
-    isLoadingFromCloud = true;
-    
+export async function setupRealtimeSync(user) {
+    if (!user) return;
     const db = getDbRef();
-    if (!db) {
-        isLoadingFromCloud = false;
-        return;
+    if (!db) return;
+
+    if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
     }
-    
+
     try {
-        const { doc, getDoc } = await import("firebase/firestore");
+        const { doc, onSnapshot } = await import("firebase/firestore");
         const userRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(userRef);
-        
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            console.log("Cloud data found, merging with local state...");
-            
-            // For settings, cloud takes precedence if exists
-            if (data.settings && typeof data.settings === 'object') {
-                state.settings = { ...state.settings, ...data.settings };
-                // Update UI based on new settings
-                applySettingsToUI();
-                applyTheme();
-                updateVolume();
+
+        unsubscribeSnapshot = onSnapshot(userRef, (docSnap) => {
+            if (isSyncing) return; // Prevent loop when local change initiated write
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                isLoadingFromCloud = true;
                 
-                // Only reset mode if timer isn't running so UI updates gracefully
-                if (!state.isRunning) {
-                   setMode(state.mode);
-                }
-            }
-            
-            // For tasks, we merge local and cloud state
-            if (Array.isArray(data.tasks)) {
-                const localTasks = state.tasks;
-                const cloudTasks = data.tasks;
-                
-                // Keep all cloud tasks, and add any local tasks that aren't in the cloud
-                const mergedTasks = [...cloudTasks];
-                const cloudTaskIds = new Set(cloudTasks.map(t => t.id));
-                
-                localTasks.forEach(t => {
-                    if (!cloudTaskIds.has(t.id)) {
-                        mergedTasks.push(t);
+                // Merge Settings
+                if (data.settings && typeof data.settings === 'object') {
+                    state.settings = { ...state.settings, ...data.settings };
+                    applySettingsToUI();
+                    applyTheme();
+                    updateVolume();
+                    if (!state.isRunning) {
+                        setMode(state.mode);
                     }
-                });
-                
-                state.tasks = mergedTasks;
-                
-                // Re-establish active task id references
-                const active = state.tasks.find(t => t.isActive);
-                if (active) {
-                    state.activeTaskId = active.id;
-                } else {
-                    state.activeTaskId = null;
                 }
                 
-                // Save locally too
-                saveTasks();
-                renderTasks();
+                // Merge Tasks (Smart Union)
+                if (Array.isArray(data.tasks)) {
+                    const localTasks = state.tasks;
+                    const cloudTasks = data.tasks;
+                    const cloudTaskIds = new Set(cloudTasks.map(t => t.id));
+                    
+                    const mergedTasks = [...cloudTasks];
+                    localTasks.forEach(t => {
+                        if (!cloudTaskIds.has(t.id)) {
+                            mergedTasks.push(t);
+                        }
+                    });
+                    
+                    state.tasks = mergedTasks;
+                    const active = state.tasks.find(t => t.isActive);
+                    state.activeTaskId = active ? active.id : null;
+                    
+                    saveTasks();
+                    renderTasks();
+                }
+                
+                // Merge Focus History
+                if (data.focusHistory && typeof data.focusHistory === 'object') {
+                    state.focusHistory = { ...state.focusHistory, ...data.focusHistory };
+                    updateStatsUI();
+                }
+                
+                syncEvents.onSyncStatusChange('synced');
+                isLoadingFromCloud = false;
             }
-            
-            // Sync focusHistory
-            if (data.focusHistory && typeof data.focusHistory === 'object') {
-                state.focusHistory = data.focusHistory;
-            }
-        } else {
-            // First time login for this user, push local data up
-            console.log("No cloud data found. Pushing local data up.");
-            await syncDataToCloud(user);
-        }
+        }, (err) => {
+            console.error("Realtime sync error:", err);
+            syncEvents.onSyncStatusChange('error');
+        });
     } catch (e) {
-        console.error("Error loading from cloud:", e);
-    } finally {
-        isLoadingFromCloud = false;
+        console.error("Failed to setup realtime sync listener:", e);
+    }
+}
+
+export function unsubscribeRealtimeSync() {
+    if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
     }
 }

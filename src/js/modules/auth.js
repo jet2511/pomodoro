@@ -1,7 +1,10 @@
 import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
 import { elements } from './elements.js';
-import { loadDataFromCloud, syncEvents } from './sync.js';
-
+import { setupRealtimeSync, unsubscribeRealtimeSync, syncEvents } from './sync.js';
+import { resetLocalState } from './state.js';
+import { renderTasks } from './tasks.js';
+import { updateStatsUI } from './stats.js';
+import { applySettingsToUI } from './settings.js';
 
 let currentUser = null;
 
@@ -19,9 +22,10 @@ export async function initAuth() {
             console.log("User logged in:", user.email);
             showLoggedInView(user);
             if (window.lucide) window.lucide.createIcons();
-            await loadDataFromCloud(user);
+            await setupRealtimeSync(user);
         } else {
             console.log("User logged out");
+            unsubscribeRealtimeSync();
             showLoggedOutView();
             if (window.lucide) window.lucide.createIcons();
         }
@@ -34,7 +38,7 @@ export async function initAuth() {
     elements.googleLoginBtn.addEventListener('click', signInWithGoogle);
     elements.emailLoginBtn.addEventListener('click', (e) => handleEmailAuth(e, 'login'));
     elements.emailRegisterBtn.addEventListener('click', (e) => handleEmailAuth(e, 'register'));
-    // Listen for sync status
+    
     syncEvents.onSyncStatusChange = (status) => {
         updateSyncUI(status);
     };
@@ -63,7 +67,6 @@ function showLoggedInView(user) {
     elements.userDisplayName.textContent = displayName;
     elements.userEmail.textContent = user.email;
     
-    // Update header button
     elements.authUsername.textContent = displayName.split(' ')[0];
     elements.authUsername.style.display = 'inline';
 }
@@ -72,13 +75,16 @@ function showLoggedOutView() {
     elements.authLoggedInView.style.display = 'none';
     elements.authLoggedOutView.style.display = 'block';
     
-    // Reset inputs
     elements.authEmail.value = '';
     elements.authPassword.value = '';
     
-    // Update header button
     elements.authUsername.style.display = 'none';
     updateSyncUI('none');
+
+    resetLocalState();
+    renderTasks();
+    updateStatsUI();
+    applySettingsToUI();
 }
 
 function updateSyncUI(status) {
@@ -110,14 +116,21 @@ async function signInWithGoogle() {
     await initFirebase();
     const auth = getAuthRef();
     const provider = getGoogleProviderRef();
-    if (!auth || !provider) return showError("Firebase not configured");
+    if (!auth || !provider) return showError("Firebase credentials not configured.");
     
     const { signInWithPopup } = await import("firebase/auth");
     try {
         await signInWithPopup(auth, provider);
         toggleAuthModal(false);
     } catch (error) {
-        showError(error.message);
+        if (error.code === 'auth/popup-closed-by-user') {
+            // Silently ignore user closing popup
+            return;
+        } else if (error.code === 'auth/popup-blocked') {
+            showError("Popup blocked by browser. Please allow popups for this site.");
+        } else {
+            showError(error.message || "Failed to sign in with Google.");
+        }
     }
 }
 
@@ -159,6 +172,7 @@ async function signOut() {
     if (!auth) return;
     const { signOut: firebaseSignOut } = await import("firebase/auth");
     try {
+        unsubscribeRealtimeSync();
         await firebaseSignOut(auth);
         toggleAuthModal(false);
     } catch (error) {
