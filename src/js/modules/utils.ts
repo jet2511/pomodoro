@@ -4,11 +4,11 @@
 
 /**
  * Checks if the user is currently typing in an input, textarea or contenteditable element
- * @param {Event} e - Keyboard event
+ * @param {KeyboardEvent} e - Keyboard event
  * @returns {boolean}
  */
-export function isUserTyping(e) {
-    const target = e.target;
+export function isUserTyping(e: KeyboardEvent): boolean {
+    const target = e.target as HTMLElement;
     return (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
@@ -22,9 +22,9 @@ export function isUserTyping(e) {
  * @param {number} wait - Wait time in milliseconds
  * @returns {Function}
  */
-export function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
+export function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: any;
+    return function executedFunction(...args: Parameters<T>) {
         const later = () => {
             clearTimeout(timeout);
             func(...args);
@@ -36,18 +36,20 @@ export function debounce(func, wait) {
 
 /**
  * Traps focus inside a modal element
- * @param {Event} e - Keyboard event
+ * @param {KeyboardEvent} e - Keyboard event
  * @param {HTMLElement} modalElement - The modal wrapper
  */
-export function trapFocus(e, modalElement) {
+export function trapFocus(e: KeyboardEvent, modalElement: HTMLElement): void {
     if (e.key !== 'Tab') return;
     
     const focusableElements = modalElement.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
     
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
+    if (focusableElements.length === 0) return;
+
+    const firstElement = focusableElements[0] as HTMLElement;
+    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
     if (e.shiftKey) {
         if (document.activeElement === firstElement) {
@@ -67,14 +69,14 @@ export function trapFocus(e, modalElement) {
  * @param {string} message - Message to display
  * @returns {Promise<boolean>}
  */
-export function customConfirm(message) {
+export function customConfirm(message: string): Promise<boolean> {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirm-modal');
         const msgEl = document.getElementById('confirm-message');
         const okBtn = document.getElementById('confirm-ok-btn');
         const cancelBtn = document.getElementById('confirm-cancel-btn');
 
-        if (!modal) {
+        if (!modal || !msgEl || !okBtn || !cancelBtn) {
             // Fallback if modal not in DOM
             resolve(window.confirm(message));
             return;

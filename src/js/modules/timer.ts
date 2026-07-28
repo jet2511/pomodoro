@@ -1,12 +1,16 @@
-import { state, notifyStateChange } from './state.js';
-import { elements } from './elements.js';
-import { toggleBackgroundSound, playAlarm } from './audio.js';
-import { customConfirm } from './utils.js';
+import { state, notifyStateChange } from './state';
+import { elements } from './elements';
+import { toggleBackgroundSound, playAlarm } from './audio';
+import { customConfirm } from './utils';
 
-let sessionStartTime = null;
-let sessionAccumulatedMs = 0;
-let targetEndTime = null;
-export const timerEvents = {
+let sessionStartTime: number | null = null;
+let sessionAccumulatedMs: number = 0;
+let targetEndTime: number | null = null;
+
+export const timerEvents: {
+    onPomodoroComplete: () => void;
+    onPomodoroStart: (() => Promise<boolean> | boolean) | null;
+} = {
     onPomodoroComplete: () => { },
     onPomodoroStart: null // returns true if start should proceed
 };
@@ -15,15 +19,15 @@ export const timerEvents = {
 const radius = elements.progressCircle.r.baseVal.value;
 const circumference = radius * 2 * Math.PI;
 elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-elements.progressCircle.style.strokeDashoffset = 0;
+elements.progressCircle.style.strokeDashoffset = '0';
 
-function setProgress(percent) {
+function setProgress(percent: number): void {
     const offset = circumference - percent / 100 * circumference;
-    elements.progressCircle.style.strokeDashoffset = offset;
+    elements.progressCircle.style.strokeDashoffset = String(offset);
 }
 
 // --- Favicon Helper ---
-function updateFavicon(mode) {
+function updateFavicon(mode: 'pomodoro' | 'shortBreak' | 'longBreak'): void {
     const color = mode === 'pomodoro' ? '#ba4949' : (mode === 'shortBreak' ? '#38858a' : '#397097');
     const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -32,7 +36,7 @@ function updateFavicon(mode) {
         </svg>
     `.trim();
 
-    let link = document.querySelector("link[rel~='icon']");
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
     if (!link) {
         link = document.createElement('link');
         link.rel = 'icon';
@@ -41,13 +45,13 @@ function updateFavicon(mode) {
     link.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-export function formatTime(seconds) {
+export function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function updateDisplay() {
+export function updateDisplay(): void {
     elements.timeDisplay.textContent = formatTime(state.timeRemaining);
     const totalTime = state.settings[state.mode] * 60;
     const mathPercent = Math.max(0, state.timeRemaining / totalTime);
@@ -56,7 +60,7 @@ export function updateDisplay() {
     document.title = `${formatTime(state.timeRemaining)} - ${getModeName(state.mode)}`;
 }
 
-function getModeName(mode) {
+function getModeName(mode: 'pomodoro' | 'shortBreak' | 'longBreak'): string {
     switch (mode) {
         case 'pomodoro': return 'Focus';
         case 'shortBreak': return 'Short Break';
@@ -65,7 +69,7 @@ function getModeName(mode) {
     }
 }
 
-export async function setMode(mode) {
+export async function setMode(mode: 'pomodoro' | 'shortBreak' | 'longBreak'): Promise<void> {
     if (state.isRunning) {
         const wantsToSwitch = await customConfirm('Timer is running. Are you sure you want to switch modes?');
         if (!wantsToSwitch) {
@@ -96,7 +100,7 @@ export async function setMode(mode) {
     updateFavicon(mode);
 }
 
-function updateStatusText() {
+function updateStatusText(): void {
     if (state.isRunning) {
         elements.statusText.textContent = state.mode === 'pomodoro' ? 'Focus time!' : 'Take a break';
     } else {
@@ -104,7 +108,7 @@ function updateStatusText() {
     }
 }
 
-async function startTimer() {
+async function startTimer(): Promise<void> {
     if (state.mode === 'pomodoro' && !state.activeTaskId) {
         if (timerEvents.onPomodoroStart) {
             const shouldContinue = await timerEvents.onPomodoroStart();
@@ -117,8 +121,11 @@ async function startTimer() {
     elements.mainBtn.setAttribute('aria-label', 'Pause Timer');
     
     // Add classes for animations
-    elements.timeDisplay.parentElement.classList.add('is-running');
-    elements.timeDisplay.closest('.timer-section').classList.add('running');
+    const displayParent = elements.timeDisplay.parentElement;
+    if (displayParent) displayParent.classList.add('is-running');
+    
+    const timerSec = elements.timeDisplay.closest('.timer-section');
+    if (timerSec) timerSec.classList.add('running');
     
     updateStatusText();
 
@@ -132,6 +139,7 @@ async function startTimer() {
     targetEndTime = sessionStartTime + (state.timeRemaining * 1000);
 
     state.timerId = setInterval(() => {
+        if (targetEndTime === null) return;
         const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
         
         if (state.timeRemaining !== remaining) {
@@ -142,7 +150,7 @@ async function startTimer() {
         if (state.timeRemaining <= 0) {
             handleTimerComplete();
         }
-    }, 200); // Update frequently for accuracy
+    }, 200) as unknown as number; // Update frequently for accuracy
 }
 
 // Ensure timer UI updates immediately when returning to the tab
@@ -157,7 +165,7 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-function stopTimer(completed = false) {
+function stopTimer(completed: boolean = false): void {
     if (state.timerId) {
         clearInterval(state.timerId);
         state.timerId = null;
@@ -174,8 +182,11 @@ function stopTimer(completed = false) {
     elements.mainBtn.setAttribute('aria-label', 'Start Timer');
     
     // Remove classes for animations
-    elements.timeDisplay.parentElement.classList.remove('is-running');
-    elements.timeDisplay.closest('.timer-section').classList.remove('running');
+    const displayParent = elements.timeDisplay.parentElement;
+    if (displayParent) displayParent.classList.remove('is-running');
+    
+    const timerSec = elements.timeDisplay.closest('.timer-section');
+    if (timerSec) timerSec.classList.remove('running');
     
     toggleBackgroundSound(false);
 
@@ -184,7 +195,7 @@ function stopTimer(completed = false) {
     }
 }
 
-export async function toggleTimer() {
+export async function toggleTimer(): Promise<void> {
     if (state.isRunning) {
         stopTimer();
     } else {
@@ -192,7 +203,7 @@ export async function toggleTimer() {
     }
 }
 
-export async function skipPhase() {
+export async function skipPhase(): Promise<void> {
     if (state.isRunning) {
         const wantsToSkip = await customConfirm("Are you sure you want to skip the current phase?");
         if (!wantsToSkip) return;
@@ -201,13 +212,13 @@ export async function skipPhase() {
     handleTimerComplete(true);
 }
 
-function showNotification(title, body) {
+function showNotification(title: string, body: string): void {
     if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(title, { body, icon: 'favicon.ico' });
     }
 }
 
-function handleTimerComplete(isSkipped = false) {
+function handleTimerComplete(isSkipped: boolean = false): void {
     stopTimer(true);
     if (!isSkipped) playAlarm();
 

@@ -1,14 +1,15 @@
-import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase.js';
-import { elements } from './elements.js';
-import { setupRealtimeSync, unsubscribeRealtimeSync, syncEvents } from './sync.js';
-import { resetLocalState } from './state.js';
-import { renderTasks } from './tasks.js';
-import { updateStatsUI } from './stats.js';
-import { applySettingsToUI } from './settings.js';
+import { User } from 'firebase/auth';
+import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase';
+import { elements } from './elements';
+import { setupRealtimeSync, unsubscribeRealtimeSync, syncEvents } from './sync';
+import { resetLocalState } from './state';
+import { renderTasks } from './tasks';
+import { updateStatsUI } from './stats';
+import { applySettingsToUI } from './settings';
 
-let currentUser = null;
+let currentUser: User | null = null;
 
-export async function initAuth() {
+export async function initAuth(): Promise<void> {
     await initFirebase();
     const auth = getAuthRef();
     if (!auth) return;
@@ -21,13 +22,13 @@ export async function initAuth() {
         if (user) {
             console.log("User logged in:", user.email);
             showLoggedInView(user);
-            if (window.lucide) window.lucide.createIcons();
+            if ((window as any).lucide) (window as any).lucide.createIcons();
             await setupRealtimeSync(user);
         } else {
             console.log("User logged out");
             unsubscribeRealtimeSync();
             showLoggedOutView();
-            if (window.lucide) window.lucide.createIcons();
+            if ((window as any).lucide) (window as any).lucide.createIcons();
         }
     });
 
@@ -46,11 +47,11 @@ export async function initAuth() {
     elements.logoutBtn.addEventListener('click', signOut);
 }
 
-export function getCurrentUser() {
+export function getCurrentUser(): User | null {
     return currentUser;
 }
 
-export function toggleAuthModal(show) {
+export function toggleAuthModal(show: boolean): void {
     if (show) {
         elements.authErrorMsg.style.display = 'none';
         elements.authModal.classList.remove('hidden');
@@ -59,19 +60,19 @@ export function toggleAuthModal(show) {
     }
 }
 
-function showLoggedInView(user) {
+function showLoggedInView(user: User): void {
     elements.authLoggedOutView.style.display = 'none';
     elements.authLoggedInView.style.display = 'block';
     
     const displayName = user.displayName || 'Focus Timer User';
     elements.userDisplayName.textContent = displayName;
-    elements.userEmail.textContent = user.email;
+    elements.userEmail.textContent = user.email || '';
     
     elements.authUsername.textContent = displayName.split(' ')[0];
     elements.authUsername.style.display = 'inline';
 }
 
-function showLoggedOutView() {
+function showLoggedOutView(): void {
     elements.authLoggedInView.style.display = 'none';
     elements.authLoggedOutView.style.display = 'block';
     
@@ -87,7 +88,7 @@ function showLoggedOutView() {
     applySettingsToUI();
 }
 
-function updateSyncUI(status) {
+function updateSyncUI(status: 'syncing' | 'synced' | 'error' | 'none'): void {
     const indicator = elements.syncIndicator;
     if (!indicator) return;
 
@@ -107,12 +108,12 @@ function updateSyncUI(status) {
     }
 }
 
-function showError(msg) {
+function showError(msg: string): void {
     elements.authErrorMsg.textContent = msg;
     elements.authErrorMsg.style.display = 'block';
 }
 
-async function signInWithGoogle() {
+async function signInWithGoogle(): Promise<void> {
     await initFirebase();
     const auth = getAuthRef();
     const provider = getGoogleProviderRef();
@@ -122,7 +123,7 @@ async function signInWithGoogle() {
     try {
         await signInWithPopup(auth, provider);
         toggleAuthModal(false);
-    } catch (error) {
+    } catch (error: any) {
         if (error.code === 'auth/popup-closed-by-user') {
             // Silently ignore user closing popup
             return;
@@ -134,7 +135,7 @@ async function signInWithGoogle() {
     }
 }
 
-async function handleEmailAuth(e, action) {
+async function handleEmailAuth(e: Event, action: 'login' | 'register'): Promise<void> {
     e.preventDefault();
     if (!elements.emailAuthForm.checkValidity()) {
         elements.emailAuthForm.reportValidity();
@@ -156,7 +157,7 @@ async function handleEmailAuth(e, action) {
             await createUserWithEmailAndPassword(auth, email, password);
         }
         toggleAuthModal(false);
-    } catch (error) {
+    } catch (error: any) {
         let cleanMsg = "An error occurred. Please try again.";
         if (error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";
         else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') cleanMsg = "Invalid email or password.";
@@ -167,7 +168,7 @@ async function handleEmailAuth(e, action) {
     }
 }
 
-async function signOut() {
+async function signOut(): Promise<void> {
     const auth = getAuthRef();
     if (!auth) return;
     const { signOut: firebaseSignOut } = await import("firebase/auth");

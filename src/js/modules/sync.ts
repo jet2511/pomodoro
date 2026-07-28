@@ -1,21 +1,21 @@
-
-import { getDbRef } from './firebase.js';
-import { state } from './state.js';
-import { saveTasks, renderTasks } from './tasks.js';
-import { applySettingsToUI, applyTheme } from './settings.js';
-import { updateVolume } from './audio.js';
-import { setMode } from './timer.js';
-import { updateStatsUI } from './stats.js';
+import { User } from 'firebase/auth';
+import { getDbRef } from './firebase';
+import { state } from './state';
+import { saveTasks, renderTasks } from './tasks';
+import { applySettingsToUI, applyTheme } from './settings';
+import { updateVolume } from './audio';
+import { setMode } from './timer';
+import { updateStatsUI } from './stats';
 
 export const syncEvents = {
-    onSyncStatusChange: () => { }
+    onSyncStatusChange: (_status: 'syncing' | 'synced' | 'error' | 'none') => { }
 };
 
 let isSyncing = false;
 export let isLoadingFromCloud = false;
-let unsubscribeSnapshot = null;
+let unsubscribeSnapshot: (() => void) | null = null;
 
-export async function syncDataToCloud(user) {
+export async function syncDataToCloud(user: User): Promise<void> {
     if (!user || isSyncing || isLoadingFromCloud) return;
     isSyncing = true;
     
@@ -45,7 +45,7 @@ export async function syncDataToCloud(user) {
     }
 }
 
-export async function setupRealtimeSync(user) {
+export async function setupRealtimeSync(user: User): Promise<void> {
     if (!user) return;
     const db = getDbRef();
     if (!db) return;
@@ -115,7 +115,7 @@ export async function setupRealtimeSync(user) {
     }
 }
 
-export function unsubscribeRealtimeSync() {
+export function unsubscribeRealtimeSync(): void {
     if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
         unsubscribeSnapshot = null;
