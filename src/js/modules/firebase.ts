@@ -6,7 +6,7 @@ const env = (typeof import.meta !== 'undefined' && (import.meta as any).env && (
 
 const firebaseConfig = {
     apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyBquo9eoROYOBPujh_tiZBjw0OjZbPQCS4",
-    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "pomodoro-web-1dc50.firebaseapp.com",
+    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? window.location.host : "pomodoro-web-1dc50.firebaseapp.com"),
     projectId: env.VITE_FIREBASE_PROJECT_ID || "pomodoro-web-1dc50",
     storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "pomodoro-web-1dc50.firebasestorage.app",
     messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "944405715848",
