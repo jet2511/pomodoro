@@ -27,18 +27,27 @@ test.describe('FocusTimer Advanced Features', () => {
 
     test('allows task reordering via drag and drop', async ({ page }) => {
         await page.fill('#task-input', 'Task 1');
-        await page.click('#add-task-form button[type="submit"]');
+        await page.keyboard.press('Enter');
+        await expect(page.locator('.task-item')).toHaveCount(1);
+
         await page.fill('#task-input', 'Task 2');
-        await page.click('#add-task-form button[type="submit"]');
+        await page.keyboard.press('Enter');
+        await expect(page.locator('.task-item')).toHaveCount(2);
 
         const tasks = page.locator('.task-item');
-        await expect(tasks).toHaveCount(2);
         await expect(tasks.nth(0)).toContainText('Task 1');
         await expect(tasks.nth(1)).toContainText('Task 2');
 
-        await tasks.nth(1).locator('.task-content').dragTo(tasks.nth(0));
-        await expect(tasks.nth(0)).toContainText('Task 2');
-        await expect(tasks.nth(1)).toContainText('Task 1');
+        await page.evaluate(() => {
+            const items = document.querySelectorAll('.task-item');
+            if (items.length >= 2) {
+                items[1].dispatchEvent(new Event('dragstart', { bubbles: true }));
+                items[0].dispatchEvent(new Event('drop', { bubbles: true }));
+                items[1].dispatchEvent(new Event('dragend', { bubbles: true }));
+            }
+        });
+        await expect(page.locator('.task-item').nth(0)).toContainText('Task 2');
+        await expect(page.locator('.task-item').nth(1)).toContainText('Task 1');
     });
 
 

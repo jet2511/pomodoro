@@ -4,6 +4,11 @@ import babel from 'vite-plugin-babel';
 
 export default defineConfig({
   base: '/pomodoro/',
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
   // Disable esbuild transformer — use Babel (pure JS) instead to avoid spawn EPERM on Windows sandbox
   esbuild: false,
   plugins: [

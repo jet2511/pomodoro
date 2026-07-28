@@ -59,7 +59,7 @@ npm run build
 
 ## 🏗 Technology Stack
 
-- **Core**: Vanilla JavaScript (ES Modules), HTML5, CSS3.
+- **Core**: TypeScript, HTML5, CSS3.
 - **Bundler**: [Vite](https://vitejs.dev/) (Rapid development & optimized builds).
 - **Backend**: [Firebase v12](https://firebase.google.com/) (Firestore & Authentication).
 - **PWA**: [Vite PWA Plugin](https://vite-pwa-org.netlify.app/).
@@ -73,7 +73,7 @@ FocusTimer comes ready with sync logic, but you need to add your own keys for cl
 
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/).
 2. Enable **Firestore** and **Authentication** (Google/Email).
-3. Copy your Web App config and paste it into `src/js/modules/firebase.js`:
+3. Copy your Web App config and paste it into `src/js/modules/firebase.ts`:
 
 ```javascript
 const firebaseConfig = {

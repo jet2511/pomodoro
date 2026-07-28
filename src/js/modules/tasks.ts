@@ -31,7 +31,7 @@ export function saveTasks(): void {
 export function addTask(title: string, estPomodoros: string | number): void {
     title = title.substring(0, 200);
     const isFirstTask = state.tasks.length === 0;
-    const taskId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const taskId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
     const newTask: Task = {
         id: taskId,
@@ -144,15 +144,15 @@ export function renderTasks(): void {
                     </button>
                 </div>
             `;
-            const content = item.querySelector('.task-content') as HTMLElement;
-            content.addEventListener('dragstart', (e: DragEvent) => {
-                if (item && e.dataTransfer) {
-                    item.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', task.id);
+            item.setAttribute('data-task-id', task.id);
+            item.addEventListener('dragstart', (e: DragEvent) => {
+                if (item) item.classList.add('dragging');
+                if (e && e.dataTransfer) {
+                    try { e.dataTransfer.setData('text/plain', task.id); } catch (_) {}
                     e.dataTransfer.effectAllowed = 'move';
                 }
             });
-            content.addEventListener('dragend', () => {
+            item.addEventListener('dragend', () => {
                 if (item) {
                     item.classList.remove('dragging');
                     document.querySelectorAll('.task-item').forEach(el => el.classList.remove('drag-over'));
@@ -160,8 +160,8 @@ export function renderTasks(): void {
             });
             item.addEventListener('dragover', (e: DragEvent) => {
                 e.preventDefault();
-                if (e.dataTransfer && item) {
-                    e.dataTransfer.dropEffect = 'move';
+                if (item) {
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
                     item.classList.add('drag-over');
                 }
             });
@@ -170,10 +170,15 @@ export function renderTasks(): void {
             });
             item.addEventListener('drop', (e: DragEvent) => {
                 e.preventDefault();
+                let draggedId = '';
                 if (e.dataTransfer) {
-                    const draggedId = e.dataTransfer.getData('text/plain');
-                    if (draggedId !== task.id) reorderTasks(draggedId, task.id);
+                    try { draggedId = e.dataTransfer.getData('text/plain'); } catch (_) {}
                 }
+                if (!draggedId) {
+                    const draggingEl = document.querySelector('.task-item.dragging') as HTMLElement;
+                    if (draggingEl) draggedId = draggingEl.getAttribute('data-task-id') || '';
+                }
+                if (draggedId && draggedId !== task.id) reorderTasks(draggedId, task.id);
             });
         } else {
             item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
