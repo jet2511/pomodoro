@@ -21,6 +21,8 @@ export const state: State = {
     pomodorosCompleted: 0,
     tasks: [],
     activeTaskId: null,
+    categories: [],
+    selectedCategoryFilter: 'all',
     settings: { ...DEFAULT_SETTINGS },
     focusHistory: {}
 };
@@ -74,8 +76,11 @@ export function saveSettings() {
 export function resetLocalState() {
     state.tasks = [];
     state.activeTaskId = null;
+    state.categories = [];
+    state.selectedCategoryFilter = 'all';
     state.settings = { ...DEFAULT_SETTINGS };
     state.focusHistory = {};
     localStorage.removeItem('pomodoro_tasks');
+    localStorage.removeItem('pomodoro_categories');
     localStorage.removeItem('pomodoro_settings');
 }

@@ -6,6 +6,7 @@ import { applySettingsToUI, applyTheme } from './settings';
 import { updateVolume } from './audio';
 import { setMode } from './timer';
 import { updateStatsUI } from './stats';
+import { saveCategories, renderCategoryFilters, renderCategoryOptions } from './categories';
 
 export const syncEvents = {
     onSyncStatusChange: (_status: 'syncing' | 'synced' | 'error' | 'none') => { }
@@ -31,6 +32,7 @@ export async function syncDataToCloud(user: User): Promise<void> {
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
             tasks: state.tasks,
+            categories: state.categories,
             settings: state.settings,
             focusHistory: state.focusHistory,
             lastSynced: serverTimestamp()
@@ -97,6 +99,14 @@ export async function setupRealtimeSync(user: User): Promise<void> {
                     renderTasks();
                 }
                 
+                // Merge Categories
+                if (Array.isArray(data.categories)) {
+                    state.categories = data.categories;
+                    saveCategories();
+                    renderCategoryFilters();
+                    renderCategoryOptions();
+                }
+
                 // Merge Focus History
                 if (data.focusHistory && typeof data.focusHistory === 'object') {
                     state.focusHistory = { ...state.focusHistory, ...data.focusHistory };

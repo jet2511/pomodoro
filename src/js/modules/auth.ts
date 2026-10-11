@@ -18,6 +18,7 @@ export async function initAuth(): Promise<void> {
     
     // Listen for auth state changes
     onAuthStateChanged(auth, async (user) => {
+        const wasLoggedIn = !!currentUser;
         currentUser = user;
         if (user) {
             console.log("User logged in:", user.email);
@@ -27,7 +28,7 @@ export async function initAuth(): Promise<void> {
         } else {
             console.log("User logged out");
             unsubscribeRealtimeSync();
-            showLoggedOutView();
+            showLoggedOutView(wasLoggedIn);
             if ((window as any).lucide) (window as any).lucide.createIcons();
         }
     });
@@ -72,7 +73,7 @@ function showLoggedInView(user: User): void {
     elements.authUsername.style.display = 'inline';
 }
 
-function showLoggedOutView(): void {
+function showLoggedOutView(shouldResetState: boolean = false): void {
     elements.authLoggedInView.style.display = 'none';
     elements.authLoggedOutView.style.display = 'block';
     
@@ -82,10 +83,12 @@ function showLoggedOutView(): void {
     elements.authUsername.style.display = 'none';
     updateSyncUI('none');
 
-    resetLocalState();
-    renderTasks();
-    updateStatsUI();
-    applySettingsToUI();
+    if (shouldResetState) {
+        resetLocalState();
+        renderTasks();
+        updateStatsUI();
+        applySettingsToUI();
+    }
 }
 
 function updateSyncUI(status: 'syncing' | 'synced' | 'error' | 'none'): void {
