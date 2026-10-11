@@ -25,6 +25,17 @@ test.describe('FocusTimer Advanced Features', () => {
         await expect(page.locator('#task-input')).toBeFocused();
     });
 
+    test('keyboard shortcut c opens and closes settings modal', async ({ page }) => {
+        const settingsModal = page.locator('#settings-modal');
+        await expect(settingsModal).toHaveClass(/hidden/);
+
+        await page.keyboard.press('c');
+        await expect(settingsModal).not.toHaveClass(/hidden/);
+
+        await page.keyboard.press('Escape');
+        await expect(settingsModal).toHaveClass(/hidden/);
+    });
+
     test('allows task reordering via drag and drop', async ({ page }) => {
         await page.fill('#task-input', 'Task 1');
         await page.keyboard.press('Enter');
