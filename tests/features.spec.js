@@ -5,6 +5,8 @@ const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://localhost:5174/pomodor
 test.describe('FocusTimer Advanced Features', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => localStorage.clear());
+        await page.reload({ waitUntil: 'domcontentloaded' });
     });
 
     test('displays basic stats placeholders', async ({ page }) => {
@@ -38,11 +40,11 @@ test.describe('FocusTimer Advanced Features', () => {
 
     test('allows task reordering via drag and drop', async ({ page }) => {
         await page.fill('#task-input', 'Task 1');
-        await page.keyboard.press('Enter');
+        await page.click('#add-task-form button[type="submit"]');
         await expect(page.locator('.task-item')).toHaveCount(1);
 
         await page.fill('#task-input', 'Task 2');
-        await page.keyboard.press('Enter');
+        await page.click('#add-task-form button[type="submit"]');
         await expect(page.locator('.task-item')).toHaveCount(2);
 
         const tasks = page.locator('.task-item');
