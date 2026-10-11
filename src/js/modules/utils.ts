@@ -3,6 +3,21 @@
  */
 
 /**
+ * Escapes HTML characters in a string to prevent XSS injection
+ * @param {string} str - Input string to escape
+ * @returns {string} Sanitized string
+ */
+export function escapeHtml(str: string): string {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
  * Checks if the user is currently typing in an input, textarea or contenteditable element
  * @param {KeyboardEvent} e - Keyboard event
  * @returns {boolean}
@@ -133,12 +148,21 @@ export function customConfirm(message: string, options?: ConfirmOptions): Promis
             modal.classList.add('hidden');
             okBtn.removeEventListener('click', onOk);
             cancelBtn.removeEventListener('click', onCancel);
+            document.removeEventListener('keydown', onKeyDown);
         };
 
         const onOk = () => { cleanup(); resolve(true); };
         const onCancel = () => { cleanup(); resolve(false); };
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                cleanup();
+                resolve(false);
+            }
+        };
 
         okBtn.addEventListener('click', onOk);
         cancelBtn.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onKeyDown);
     });
 }

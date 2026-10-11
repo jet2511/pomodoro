@@ -1,6 +1,7 @@
 import { state, notifyStateChange } from './state';
 import { elements } from './elements';
 import { Category } from '../types/index';
+import { escapeHtml } from './utils';
 
 export const DEFAULT_CATEGORIES: Category[] = [
     { id: 'cat_work', name: 'Work', color: '#4F46E5', isDefault: true },
@@ -124,7 +125,8 @@ export function renderCategoryFilters(): void {
         btn.type = 'button';
         btn.className = `category-filter-btn ${state.selectedCategoryFilter === cat.id ? 'active' : ''}`;
         btn.setAttribute('data-category-id', cat.id);
-        btn.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${cat.name}</span>`;
+        const safeName = escapeHtml(cat.name);
+        btn.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
         btn.onclick = () => setCategoryFilter(cat.id);
         elements.categoryFiltersContainer.appendChild(btn);
     });

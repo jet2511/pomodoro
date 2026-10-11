@@ -2,6 +2,7 @@ import { state, notifyStateChange } from './state';
 import { elements } from './elements';
 import { Task } from '../types/index';
 import { getCategoryById, categoryEvents } from './categories';
+import { escapeHtml } from './utils';
 
 export const taskEvents = {
     onTaskActivated: () => { }
@@ -195,10 +196,9 @@ export function renderArchiveModal(searchQuery: string = ''): void {
         item.className = `archive-task-item ${task.isCompleted ? 'completed' : ''}`;
         item.setAttribute('data-task-id', task.id);
 
-        const tempDiv = document.createElement('div');
-        tempDiv.textContent = task.title;
-        const sanitizedTitle = tempDiv.innerHTML;
+        const sanitizedTitle = escapeHtml(task.title);
         const cat = getCategoryById(task.categoryId);
+        const safeCatName = escapeHtml(cat.name);
 
         item.innerHTML = `
             <div class="archive-task-check">
@@ -209,7 +209,7 @@ export function renderArchiveModal(searchQuery: string = ''): void {
                     <span class="task-title-text">${sanitizedTitle}</span>
                     <span class="task-category-badge-static">
                         <span class="category-dot" style="background-color: ${cat.color}"></span>
-                        <span>${cat.name}</span>
+                        <span>${safeCatName}</span>
                     </span>
                 </div>
                 <div class="archive-task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
@@ -285,11 +285,10 @@ export function renderTasks(): void {
 
     filteredTasks.forEach(task => {
         let item = existingMap.get(task.id) as HTMLElement | undefined;
-        const tempDiv = document.createElement('div');
-        tempDiv.textContent = task.title;
-        const sanitizedTitle = tempDiv.innerHTML;
+        const sanitizedTitle = escapeHtml(task.title);
         const cat = getCategoryById(task.categoryId);
-        const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${cat.name}"><span class="category-dot" style="background-color: ${cat.color}"></span><span>${cat.name}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
+        const safeCatName = escapeHtml(cat.name);
+        const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
         const titleWithBadge = `<span class="task-title-text">${sanitizedTitle}</span> ${categoryBadgeHtml}`;
         const statsText = `${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}`;
 

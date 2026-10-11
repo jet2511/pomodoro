@@ -275,6 +275,68 @@ test.describe('FocusTimer Advanced Features', () => {
         await page.locator('#close-archive-btn').click();
         await expect(page.locator('.task-item')).toHaveCount(0);
     });
+
+    test('blocks keyboard shortcuts when confirm modal is visible', async ({ page }) => {
+        const mainBtn = page.locator('#main-btn');
+        await expect(mainBtn).toHaveText('Start');
+
+        // Add a task and archive it
+        await page.locator('#task-input').fill('Task to Confirm');
+        await page.locator('#task-input').press('Enter');
+        await page.locator('.task-item').first().locator('.archive-btn').click();
+
+        // Open archive modal and trigger permanent delete confirm modal
+        await page.locator('#open-archive-btn').click();
+        await page.locator('#archive-modal .delete-permanent-btn').first().click();
+
+        const confirmDialog = page.locator('#confirm-modal');
+        await expect(confirmDialog).not.toHaveClass(/hidden/);
+
+        // Press Space while confirm dialog is open -> timer should NOT start
+        await page.keyboard.press(' ');
+        await expect(mainBtn).toHaveText('Start');
+
+        // Press Escape -> dismiss confirm modal
+        await page.keyboard.press('Escape');
+        await expect(confirmDialog).toHaveClass(/hidden/);
+
+        // Close archive modal
+        await page.locator('#close-archive-btn').click();
+    });
+
+    test('sanitizes category names to prevent XSS injection', async ({ page }) => {
+        await page.locator('.category-filter-add-btn').click();
+        const categoryModal = page.locator('#category-modal');
+        await expect(categoryModal).not.toHaveClass(/hidden/);
+
+        // Enter malicious XSS payload in category name (under 30 char limit)
+        const xssPayload = '<img src=x onerror=xss=1>';
+        await page.locator('#category-name-input').fill(xssPayload);
+        await page.locator('#category-save-btn').click();
+        await expect(categoryModal).toHaveClass(/hidden/);
+
+        // Check window.xss was never evaluated
+        const isXssTriggered = await page.evaluate(() => window.xss === 1);
+        expect(isXssTriggered).toBe(false);
+
+        // Verify category button displays escaped payload as text
+        const catBtn = page.locator('button.category-filter-btn', { hasText: xssPayload });
+        await expect(catBtn).toBeVisible();
+
+        // Create task under this category
+        await catBtn.click();
+        await page.locator('#task-input').fill('Task under XSS category');
+        await page.locator('#task-input').press('Enter');
+
+        const taskItem = page.locator('.task-item').first();
+        await expect(taskItem).toBeVisible();
+        const badge = taskItem.locator('.task-category-badge');
+        await expect(badge).toBeVisible();
+
+        // Ensure XSS was not triggered during task rendering
+        const isXssStillTriggered = await page.evaluate(() => window.xss === 1);
+        expect(isXssStillTriggered).toBe(false);
+    });
 });
 
 

@@ -1,7 +1,8 @@
 import { User } from 'firebase/auth';
 import { getDbRef } from './firebase';
 import { state } from './state';
-import { saveTasks, renderTasks } from './tasks';
+import { elements } from './elements';
+import { saveTasks, renderTasks, renderArchiveModal } from './tasks';
 import { applySettingsToUI, applyTheme } from './settings';
 import { updateVolume } from './audio';
 import { setMode } from './timer';
@@ -92,11 +93,16 @@ export async function setupRealtimeSync(user: User): Promise<void> {
                     });
                     
                     state.tasks = mergedTasks;
-                    const active = state.tasks.find(t => t.isActive);
+                    const active = state.tasks.find(t => t.isActive && !t.isArchived);
                     state.activeTaskId = active ? active.id : null;
                     
                     saveTasks();
                     renderTasks();
+
+                    if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
+                        const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
+                        renderArchiveModal(searchVal);
+                    }
                 }
                 
                 // Merge Categories

@@ -8,7 +8,7 @@ import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth';
 import { syncDataToCloud } from './modules/sync';
 import { updateStatsUI } from './modules/stats';
 import { initPiP, togglePiP, updateActiveTaskDisplay } from './modules/pip';
-import { isUserTyping, debounce, trapFocus, customConfirm } from './modules/utils';
+import { isUserTyping, debounce, trapFocus, customConfirm, escapeHtml } from './modules/utils';
 import { loadCategories, addCategory, CATEGORY_COLORS } from './modules/categories';
 import { state } from './modules/state';
 
@@ -144,8 +144,13 @@ elements.pipBtn.addEventListener('click', togglePiP);
 
 // Inline Category Picker Popover
 let activeCategoryPicker: HTMLElement | null = null;
+let popoverCleanup: (() => void) | null = null;
 
 function closeCategoryPicker(): void {
+    if (popoverCleanup) {
+        popoverCleanup();
+        popoverCleanup = null;
+    }
     if (activeCategoryPicker) {
         activeCategoryPicker.remove();
         activeCategoryPicker = null;
@@ -162,7 +167,8 @@ function showCategoryPicker(anchorEl: HTMLElement, taskId: string): void {
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'category-picker-item';
-        item.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${cat.name}</span>`;
+        const safeName = escapeHtml(cat.name);
+        item.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
         item.onclick = (e: MouseEvent) => {
             e.stopPropagation();
             updateTaskCategory(taskId, cat.id);
@@ -183,6 +189,22 @@ function showCategoryPicker(anchorEl: HTMLElement, taskId: string): void {
 
     picker.style.top = `${top}px`;
     picker.style.left = `${left}px`;
+
+    const startY = window.scrollY;
+    const onScroll = () => {
+        if (Math.abs(window.scrollY - startY) > 20) {
+            closeCategoryPicker();
+        }
+    };
+    const onResize = () => closeCategoryPicker();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+
+    popoverCleanup = () => {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onResize);
+    };
 }
 
 document.addEventListener('click', (e: Event) => {
@@ -357,6 +379,8 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     const isAuthOpen = !elements.authModal.classList.contains('hidden');
     const isCategoryOpen = elements.categoryModal && !elements.categoryModal.classList.contains('hidden');
     const isArchiveOpen = elements.archiveModal && !elements.archiveModal.classList.contains('hidden');
+    const confirmModalEl = document.getElementById('confirm-modal');
+    const isConfirmOpen = confirmModalEl && !confirmModalEl.classList.contains('hidden');
 
     if (isSettingsOpen) {
         trapFocus(e, elements.settingsModal);
@@ -369,6 +393,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     }
 
     if (e.key === 'Escape') {
+        if (isConfirmOpen) return;
         if (isSettingsOpen) toggleSettingsModal(false);
         if (isAuthOpen) toggleAuthModal(false);
         if (isCategoryOpen) elements.categoryModal.classList.add('hidden');
@@ -376,7 +401,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
     }
 
     // Keyboard Shortcuts (only if not typing and no modifier keys and no modal open)
-    if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen && !isCategoryOpen && !isArchiveOpen) {
+    if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen && !isCategoryOpen && !isArchiveOpen && !isConfirmOpen) {
         if (e.code === 'Space' || e.key === ' ') {
             e.preventDefault();
             toggleTimer();

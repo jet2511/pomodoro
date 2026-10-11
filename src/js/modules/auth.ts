@@ -6,6 +6,7 @@ import { resetLocalState } from './state';
 import { renderTasks } from './tasks';
 import { updateStatsUI } from './stats';
 import { applySettingsToUI } from './settings';
+import { loadCategories } from './categories';
 
 let currentUser: User | null = null;
 
@@ -85,6 +86,7 @@ function showLoggedOutView(shouldResetState: boolean = false): void {
 
     if (shouldResetState) {
         resetLocalState();
+        loadCategories();
         renderTasks();
         updateStatsUI();
         applySettingsToUI();
