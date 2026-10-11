@@ -4,6 +4,9 @@ const BASE_URL = process.env.POMODORO_BASE_URL ?? 'http://localhost:5174/pomodor
 
 test.describe('FocusTimer Advanced Features', () => {
     test.beforeEach(async ({ page }) => {
+        await page.addInitScript(() => {
+            try { localStorage.clear(); } catch (_) {}
+        });
         await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     });
 
@@ -23,15 +26,29 @@ test.describe('FocusTimer Advanced Features', () => {
 
         await page.keyboard.press('t');
         await expect(page.locator('#task-input')).toBeFocused();
+        await page.locator('#task-input').blur();
+    });
+
+    test('keyboard shortcut c opens and closes settings modal', async ({ page }) => {
+        const settingsModal = page.locator('#settings-modal');
+        await expect(settingsModal).toHaveClass(/hidden/);
+
+        await page.keyboard.press('c');
+        await expect(settingsModal).not.toHaveClass(/hidden/);
+
+        await page.keyboard.press('Escape');
+        await expect(settingsModal).toHaveClass(/hidden/);
     });
 
     test('allows task reordering via drag and drop', async ({ page }) => {
-        await page.fill('#task-input', 'Task 1');
-        await page.keyboard.press('Enter');
+        await page.locator('#task-input').click();
+        await page.locator('#task-input').fill('Task 1');
+        await page.locator('#task-input').press('Enter');
         await expect(page.locator('.task-item')).toHaveCount(1);
 
-        await page.fill('#task-input', 'Task 2');
-        await page.keyboard.press('Enter');
+        await page.locator('#task-input').click();
+        await page.locator('#task-input').fill('Task 2');
+        await page.locator('#task-input').press('Enter');
         await expect(page.locator('.task-item')).toHaveCount(2);
 
         const tasks = page.locator('.task-item');

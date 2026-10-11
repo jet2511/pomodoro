@@ -142,6 +142,10 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
         if (e.key.toLowerCase() === 'p') {
             togglePiP();
         }
+        if (e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            toggleSettingsModal(true);
+        }
     }
 });
 
