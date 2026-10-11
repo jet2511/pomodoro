@@ -25,6 +25,7 @@ test.describe('FocusTimer Advanced Features', () => {
 
         await page.keyboard.press('t');
         await expect(page.locator('#task-input')).toBeFocused();
+        await page.locator('#task-input').blur();
     });
 
     test('keyboard shortcut c opens and closes settings modal', async ({ page }) => {
