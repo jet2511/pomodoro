@@ -96,7 +96,25 @@ const elements = {
   // Timer Section
   timerSection: document.querySelector('.timer-section'),
   // PiP
-  pipBtn: document.getElementById('pip-btn')
+  pipBtn: document.getElementById('pip-btn'),
+  // Categories
+  categoryFiltersContainer: document.getElementById('category-filters'),
+  taskCategorySelect: document.getElementById('task-category-select'),
+  categoryModal: document.getElementById('category-modal'),
+  categoryNameInput: document.getElementById('category-name-input'),
+  categoryColorOptions: document.getElementById('category-color-options'),
+  categorySaveBtn: document.getElementById('category-save-btn'),
+  categoryCancelBtn: document.getElementById('category-cancel-btn'),
+  categoryCloseBtn: document.getElementById('close-category-btn'),
+  // Archive
+  openArchiveBtn: document.getElementById('open-archive-btn'),
+  archiveCountBadge: document.getElementById('archive-count-badge'),
+  archiveModal: document.getElementById('archive-modal'),
+  archiveModalCount: document.getElementById('archive-modal-count'),
+  closeArchiveBtn: document.getElementById('close-archive-btn'),
+  archiveEmptyBtn: document.getElementById('archive-empty-btn'),
+  archiveSearchInput: document.getElementById('archive-search-input'),
+  archiveTaskList: document.getElementById('archive-task-list')
 };
 
 const DEFAULT_SETTINGS = {
@@ -119,6 +137,8 @@ const state = {
   pomodorosCompleted: 0,
   tasks: [],
   activeTaskId: null,
+  categories: [],
+  selectedCategoryFilter: 'all',
   settings: {
     ...DEFAULT_SETTINGS
   },
@@ -177,11 +197,14 @@ function saveSettings$1() {
 function resetLocalState() {
   state.tasks = [];
   state.activeTaskId = null;
+  state.categories = [];
+  state.selectedCategoryFilter = 'all';
   state.settings = {
     ...DEFAULT_SETTINGS
   };
   state.focusHistory = {};
   localStorage.removeItem('pomodoro_tasks');
+  localStorage.removeItem('pomodoro_categories');
   localStorage.removeItem('pomodoro_settings');
 }
 
@@ -226,6 +249,16 @@ function updateVolume() {
 /**
  * Utility functions for FocusTimer
  */
+
+/**
+ * Escapes HTML characters in a string to prevent XSS injection
+ * @param {string} str - Input string to escape
+ * @returns {string} Sanitized string
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 /**
  * Checks if the user is currently typing in an input, textarea or contenteditable element
@@ -278,29 +311,63 @@ function trapFocus(e, modalElement) {
     }
   }
 }
-
 /**
  * Custom confirm modal
  * @param {string} message - Message to display
+ * @param {ConfirmOptions} [options] - Optional custom title, button labels, and style
  * @returns {Promise<boolean>}
  */
-function customConfirm(message) {
+function customConfirm(message, options) {
   return new Promise(resolve => {
     const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-title');
     const msgEl = document.getElementById('confirm-message');
     const okBtn = document.getElementById('confirm-ok-btn');
     const cancelBtn = document.getElementById('confirm-cancel-btn');
+    const iconWrap = document.getElementById('confirm-icon-wrap');
     if (!modal || !msgEl || !okBtn || !cancelBtn) {
       // Fallback if modal not in DOM
       resolve(window.confirm(message));
       return;
     }
+    const isDanger = options?.isDanger ?? /xóa|delete|hủy|không thể hoàn tác/i.test(message);
+    const title = options?.title ?? (isDanger ? 'Xác nhận thao tác xóa' : 'Xác nhận thao tác');
+    const confirmText = options?.confirmText ?? (isDanger ? 'Xác nhận xóa' : 'Xác nhận');
+    const cancelText = options?.cancelText ?? 'Hủy bỏ';
+    if (titleEl) titleEl.textContent = title;
     msgEl.textContent = message;
+    okBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+    if (iconWrap) {
+      if (isDanger) {
+        iconWrap.className = 'confirm-icon-wrap danger';
+        iconWrap.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                `;
+        okBtn.className = 'confirm-btn-confirm danger';
+      } else {
+        iconWrap.className = 'confirm-icon-wrap info';
+        iconWrap.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                `;
+        okBtn.className = 'confirm-btn-confirm primary';
+      }
+    }
     modal.classList.remove('hidden');
     const cleanup = () => {
       modal.classList.add('hidden');
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onKeyDown);
     };
     const onOk = () => {
       cleanup();
@@ -310,8 +377,16 @@ function customConfirm(message) {
       cleanup();
       resolve(false);
     };
+    const onKeyDown = e => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        cleanup();
+        resolve(false);
+      }
+    };
     okBtn.addEventListener('click', onOk);
     cancelBtn.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKeyDown);
   });
 }
 
@@ -544,11 +619,163 @@ function handleTimerComplete(isSkipped = false) {
   }
 }
 
+const DEFAULT_CATEGORIES = [{
+  id: 'cat_work',
+  name: 'Work',
+  color: '#4F46E5',
+  isDefault: true
+}, {
+  id: 'cat_study',
+  name: 'Study',
+  color: '#06B6D4',
+  isDefault: true
+}, {
+  id: 'cat_personal',
+  name: 'Personal',
+  color: '#10B981',
+  isDefault: true
+}, {
+  id: 'cat_general',
+  name: 'General',
+  color: '#6B7280',
+  isDefault: true
+}];
+const CATEGORY_COLORS = ['#4F46E5',
+// Indigo
+'#06B6D4',
+// Cyan
+'#10B981',
+// Emerald
+'#F59E0B',
+// Amber
+'#F43F5E',
+// Rose
+'#8B5CF6',
+// Purple
+'#6B7280',
+// Gray
+'#2563EB' // Blue
+];
+const categoryEvents = {
+  onCategoryChanged: () => {}
+};
+function loadCategories() {
+  const saved = localStorage.getItem('pomodoro_categories');
+  if (saved) {
+    try {
+      state.categories = JSON.parse(saved);
+    } catch (e) {
+      state.categories = [...DEFAULT_CATEGORIES];
+    }
+  } else {
+    state.categories = [...DEFAULT_CATEGORIES];
+  }
+  if (!state.categories || state.categories.length === 0) {
+    state.categories = [...DEFAULT_CATEGORIES];
+  }
+  renderCategoryFilters();
+  renderCategoryOptions();
+}
+function saveCategories() {
+  localStorage.setItem('pomodoro_categories', JSON.stringify(state.categories));
+}
+function getCategoryById(id) {
+  if (!id) return state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+  return state.categories.find(c => c.id === id) || state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+}
+function addCategory(name, color) {
+  const trimmed = name.trim().substring(0, 30);
+  if (!trimmed) return null;
+  const exists = state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase());
+  if (exists) return null;
+  const newCategory = {
+    id: 'cat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    name: trimmed,
+    color: color || '#6B7280'
+  };
+  state.categories.push(newCategory);
+  saveCategories();
+  renderCategoryFilters();
+  renderCategoryOptions();
+  notifyStateChange();
+  categoryEvents.onCategoryChanged();
+  return newCategory;
+}
+function setCategoryFilter(id) {
+  state.selectedCategoryFilter = id;
+  renderCategoryFilters();
+  categoryEvents.onCategoryChanged();
+}
+function renderCategoryFilters() {
+  if (!elements.categoryFiltersContainer) return;
+  if (!state.categories || state.categories.length === 0) {
+    state.categories = [...DEFAULT_CATEGORIES];
+  }
+  elements.categoryFiltersContainer.innerHTML = '';
+
+  // 'All' button
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = `category-filter-btn ${state.selectedCategoryFilter === 'all' ? 'active' : ''}`;
+  allBtn.textContent = 'All';
+  allBtn.onclick = () => setCategoryFilter('all');
+  elements.categoryFiltersContainer.appendChild(allBtn);
+
+  // Specific category buttons
+  state.categories.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `category-filter-btn ${state.selectedCategoryFilter === cat.id ? 'active' : ''}`;
+    btn.setAttribute('data-category-id', cat.id);
+    const safeName = escapeHtml(cat.name);
+    btn.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+    btn.onclick = () => setCategoryFilter(cat.id);
+    elements.categoryFiltersContainer.appendChild(btn);
+  });
+
+  // Add category button
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'category-filter-add-btn';
+  addBtn.title = 'Add Category';
+  addBtn.setAttribute('aria-label', 'Add Category');
+  addBtn.innerHTML = '+';
+  addBtn.onclick = () => {
+    if (elements.categoryModal) {
+      elements.categoryModal.classList.remove('hidden');
+      if (elements.categoryNameInput) {
+        elements.categoryNameInput.value = '';
+        elements.categoryNameInput.focus();
+      }
+    }
+  };
+  elements.categoryFiltersContainer.appendChild(addBtn);
+}
+function renderCategoryOptions() {
+  if (!elements.taskCategorySelect) return;
+  if (!state.categories || state.categories.length === 0) {
+    state.categories = [...DEFAULT_CATEGORIES];
+  }
+  elements.taskCategorySelect.innerHTML = '';
+  state.categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.id;
+    opt.textContent = cat.name;
+    if (cat.id === (state.selectedCategoryFilter !== 'all' ? state.selectedCategoryFilter : 'cat_general')) {
+      opt.selected = true;
+    }
+    elements.taskCategorySelect.appendChild(opt);
+  });
+}
+
 const taskEvents = {
   onTaskActivated: () => {}
 };
+categoryEvents.onCategoryChanged = () => {
+  renderTasks();
+};
 function getFirstIncompleteTask() {
-  return state.tasks.find(t => !t.isCompleted) || null;
+  return state.tasks.find(t => !t.isCompleted && !t.isArchived) || null;
 }
 function loadTasks() {
   const saved = localStorage.getItem('pomodoro_tasks');
@@ -558,26 +785,40 @@ function loadTasks() {
     } catch (e) {
       state.tasks = [];
     }
-    const active = state.tasks.find(t => t.isActive);
-    if (active) state.activeTaskId = active.id;
+    const active = state.tasks.find(t => t.isActive && !t.isArchived);
+    if (active) state.activeTaskId = active.id;else state.activeTaskId = null;
     renderTasks();
   }
+  updateArchiveBadgeCount();
 }
 function saveTasks() {
   localStorage.setItem('pomodoro_tasks', JSON.stringify(state.tasks));
 }
-function addTask(title, estPomodoros) {
+function addTask(title, estPomodoros, categoryId) {
   title = title.substring(0, 200);
   const isFirstTask = state.tasks.length === 0;
   const taskId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
   const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
+
+  // If not explicitly provided, use current filter if specific, else General
+  let selectedCategory = categoryId;
+  if (!selectedCategory) {
+    if (state.selectedCategoryFilter && state.selectedCategoryFilter !== 'all') {
+      selectedCategory = state.selectedCategoryFilter;
+    } else if (elements.taskCategorySelect && elements.taskCategorySelect.value) {
+      selectedCategory = elements.taskCategorySelect.value;
+    } else {
+      selectedCategory = 'cat_general';
+    }
+  }
   const newTask = {
     id: taskId,
     title,
     estPomodoros: Math.min(100, Math.max(1, est || 1)),
     actualPomodoros: 0,
     isCompleted: false,
-    isActive: isFirstTask
+    isActive: isFirstTask,
+    categoryId: selectedCategory
   };
   if (isFirstTask) state.activeTaskId = newTask.id;
   state.tasks.push(newTask);
@@ -611,13 +852,126 @@ function setActiveTask(id) {
   }
 }
 function deleteTask(id) {
+  // Instead of deleting, archive the task
+  archiveTask(id);
+}
+function archiveTask(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (task) {
+    task.isArchived = true;
+    task.archivedAt = Date.now();
+    if (state.activeTaskId === id) {
+      state.activeTaskId = null;
+    }
+    saveTasks();
+    renderTasks();
+    renderArchiveModal(elements.archiveSearchInput ? elements.archiveSearchInput.value : '');
+    notifyStateChange();
+  }
+}
+function restoreTask(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (task) {
+    task.isArchived = false;
+    saveTasks();
+    renderTasks();
+    renderArchiveModal(elements.archiveSearchInput ? elements.archiveSearchInput.value : '');
+    notifyStateChange();
+  }
+}
+function deletePermanently(id) {
   state.tasks = state.tasks.filter(t => t.id !== id);
   if (state.activeTaskId === id) {
     state.activeTaskId = null;
   }
   saveTasks();
   renderTasks();
+  renderArchiveModal(elements.archiveSearchInput ? elements.archiveSearchInput.value : '');
   notifyStateChange();
+}
+function emptyArchivedTasks() {
+  state.tasks = state.tasks.filter(t => !t.isArchived);
+  saveTasks();
+  renderTasks();
+  renderArchiveModal();
+  notifyStateChange();
+}
+function updateArchiveBadgeCount() {
+  const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+  if (elements.archiveCountBadge) {
+    elements.archiveCountBadge.textContent = count.toString();
+    if (count > 0) {
+      elements.archiveCountBadge.classList.add('has-items');
+    } else {
+      elements.archiveCountBadge.classList.remove('has-items');
+    }
+  }
+  if (elements.archiveModalCount) {
+    elements.archiveModalCount.textContent = `${count} ${count === 1 ? 'task' : 'tasks'}`;
+  }
+}
+function renderArchiveModal(searchQuery = '') {
+  updateArchiveBadgeCount();
+  if (!elements.archiveTaskList) return;
+  const archivedTasks = (state.tasks || []).filter(t => t.isArchived);
+  const query = searchQuery.trim().toLowerCase();
+  const filtered = query ? archivedTasks.filter(t => t.title.toLowerCase().includes(query)) : archivedTasks;
+  if (filtered.length === 0) {
+    const emptyMsg = query ? 'Không tìm thấy công việc phù hợp.' : 'Chưa có công việc nào được lưu trữ.';
+    elements.archiveTaskList.innerHTML = `
+            <div class="archive-empty-state">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                    <rect x="1" y="3" width="22" height="5"></rect>
+                    <line x1="10" y1="12" x2="14" y2="12"></line>
+                </svg>
+                <p>${emptyMsg}</p>
+            </div>
+        `;
+    return;
+  }
+  elements.archiveTaskList.innerHTML = '';
+  filtered.forEach(task => {
+    const item = document.createElement('div');
+    item.className = `archive-task-item ${task.isCompleted ? 'completed' : ''}`;
+    item.setAttribute('data-task-id', task.id);
+    const sanitizedTitle = escapeHtml(task.title);
+    const cat = getCategoryById(task.categoryId);
+    const safeCatName = escapeHtml(cat.name);
+    item.innerHTML = `
+            <div class="archive-task-check">
+                <svg viewBox="0 0 448 512" width="12" height="12" fill="currentColor"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
+            </div>
+            <div class="archive-task-info">
+                <div class="archive-task-title">
+                    <span class="task-title-text">${sanitizedTitle}</span>
+                    <span class="task-category-badge-static">
+                        <span class="category-dot" style="background-color: ${cat.color}"></span>
+                        <span>${safeCatName}</span>
+                    </span>
+                </div>
+                <div class="archive-task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
+            </div>
+            <div class="archive-task-actions">
+                <button class="action-btn restore-btn" data-action="restore" data-id="${task.id}" title="Khôi phục về danh sách chính" aria-label="Restore task">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                </button>
+                <button class="action-btn delete-btn delete-permanent-btn" data-action="delete-permanent" data-id="${task.id}" title="Xóa vĩnh viễn" aria-label="Delete permanently">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+            </div>
+        `;
+    elements.archiveTaskList.appendChild(item);
+  });
+}
+function updateTaskCategory(taskId, categoryId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (task && task.categoryId !== categoryId) {
+    task.categoryId = categoryId;
+    saveTasks();
+    renderTasks();
+    notifyStateChange();
+  }
 }
 function updateTaskPomodoros() {
   if (!state.activeTaskId) return;
@@ -630,8 +984,15 @@ function updateTaskPomodoros() {
   }
 }
 function renderTasks() {
-  if (state.tasks.length === 0) {
-    elements.taskList.innerHTML = `<div style="text-align: center; color: var(--clr-text-muted); font-size: 0.9rem; padding: 1rem 0;">No tasks yet. Add one above!</div>`;
+  if (elements.form) {
+    elements.form.style.display = 'flex';
+  }
+  const activeTasks = state.tasks.filter(t => !t.isArchived);
+  const filteredTasks = state.selectedCategoryFilter === 'all' ? activeTasks : activeTasks.filter(t => (t.categoryId || 'cat_general') === state.selectedCategoryFilter);
+  updateArchiveBadgeCount();
+  if (filteredTasks.length === 0) {
+    const msg = activeTasks.length === 0 ? 'No tasks yet. Add one above!' : 'No tasks in this category.';
+    elements.taskList.innerHTML = `<div style="text-align: center; color: var(--clr-text-muted); font-size: 0.9rem; padding: 1.5rem 0;">${msg}</div>`;
     return;
   }
   const emptyMsg = elements.taskList.querySelector('div[style]');
@@ -647,12 +1008,19 @@ function renderTasks() {
     }
   });
   let currentSibling = null;
-  state.tasks.forEach(task => {
+  filteredTasks.forEach(task => {
     let item = existingMap.get(task.id);
-    const tempDiv = document.createElement('div');
-    tempDiv.textContent = task.title;
-    const sanitizedTitle = tempDiv.innerHTML;
+    const sanitizedTitle = escapeHtml(task.title);
+    const cat = getCategoryById(task.categoryId);
+    const safeCatName = escapeHtml(cat.name);
+    const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    const titleWithBadge = `<span class="task-title-text">${sanitizedTitle}</span> ${categoryBadgeHtml}`;
     const statsText = `${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}`;
+    const actionsHtml = `
+            <button class="action-btn archive-btn" data-action="archive" data-id="${task.id}" title="Lưu trữ công việc" aria-label="Archive Task">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
+        `;
     if (!item) {
       item = document.createElement('div');
       item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
@@ -661,13 +1029,11 @@ function renderTasks() {
                     <svg viewBox="0 0 448 512" width="14" height="14" fill="currentColor"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
                 </div>
                 <div class="task-content" data-action="activate" data-id="${task.id}" draggable="true">
-                    <div class="task-text">${sanitizedTitle}</div>
+                    <div class="task-text">${titleWithBadge}</div>
                     <div class="task-stats">${statsText}</div>
                 </div>
                 <div class="task-actions">
-                    <button class="action-btn delete-btn" data-action="delete" data-id="${task.id}" title="Delete Task">
-                        <svg viewBox="0 0 448 512" width="14" height="14" fill="currentColor"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"/></svg>
-                    </button>
+                    ${actionsHtml}
                 </div>
             `;
       item.setAttribute('data-task-id', task.id);
@@ -713,9 +1079,13 @@ function renderTasks() {
     } else {
       item.className = `task-item ${task.isActive ? 'active' : ''} ${task.isCompleted ? 'completed' : ''}`;
       const textEl = item.querySelector('.task-text');
-      if (textEl.innerHTML !== sanitizedTitle) textEl.innerHTML = sanitizedTitle;
+      if (textEl && textEl.innerHTML !== titleWithBadge) textEl.innerHTML = titleWithBadge;
       const statsEl = item.querySelector('.task-stats');
-      if (statsEl.textContent !== statsText) statsEl.textContent = statsText;
+      if (statsEl && statsEl.textContent !== statsText) statsEl.textContent = statsText;
+      const actionsEl = item.querySelector('.task-actions');
+      if (actionsEl && actionsEl.innerHTML.trim() !== actionsHtml.trim()) {
+        actionsEl.innerHTML = actionsHtml;
+      }
       existingMap.delete(task.id);
     }
     if (!currentSibling) {
@@ -939,6 +1309,7 @@ async function syncDataToCloud(user) {
     const userRef = doc(db, 'users', user.uid);
     await setDoc(userRef, {
       tasks: state.tasks,
+      categories: state.categories,
       settings: state.settings,
       focusHistory: state.focusHistory,
       lastSynced: serverTimestamp()
@@ -1006,10 +1377,22 @@ async function setupRealtimeSync(user) {
             }
           });
           state.tasks = mergedTasks;
-          const active = state.tasks.find(t => t.isActive);
+          const active = state.tasks.find(t => t.isActive && !t.isArchived);
           state.activeTaskId = active ? active.id : null;
           saveTasks();
           renderTasks();
+          if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
+            const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
+            renderArchiveModal(searchVal);
+          }
+        }
+
+        // Merge Categories
+        if (Array.isArray(data.categories)) {
+          state.categories = data.categories;
+          saveCategories();
+          renderCategoryFilters();
+          renderCategoryOptions();
         }
 
         // Merge Focus History
@@ -1053,6 +1436,7 @@ async function initAuth() {
 
   // Listen for auth state changes
   onAuthStateChanged(auth, async user => {
+    const wasLoggedIn = !!currentUser;
     currentUser = user;
     if (user) {
       console.log("User logged in:", user.email);
@@ -1062,7 +1446,7 @@ async function initAuth() {
     } else {
       console.log("User logged out");
       unsubscribeRealtimeSync();
-      showLoggedOutView();
+      showLoggedOutView(wasLoggedIn);
       if (window.lucide) window.lucide.createIcons();
     }
   });
@@ -1098,17 +1482,20 @@ function showLoggedInView(user) {
   elements.authUsername.textContent = displayName.split(' ')[0];
   elements.authUsername.style.display = 'inline';
 }
-function showLoggedOutView() {
+function showLoggedOutView(shouldResetState = false) {
   elements.authLoggedInView.style.display = 'none';
   elements.authLoggedOutView.style.display = 'block';
   elements.authEmail.value = '';
   elements.authPassword.value = '';
   elements.authUsername.style.display = 'none';
   updateSyncUI('none');
-  resetLocalState();
-  renderTasks();
-  updateStatsUI();
-  applySettingsToUI();
+  if (shouldResetState) {
+    resetLocalState();
+    loadCategories();
+    renderTasks();
+    updateStatsUI();
+    applySettingsToUI();
+  }
 }
 function updateSyncUI(status) {
   const indicator = elements.syncIndicator;
@@ -1664,13 +2051,19 @@ function updateActiveTaskDisplay() {
     taskEl = document.getElementById('current-task-display');
   }
   if (taskEl) {
-    const activeTask = document.querySelector('.task-item.active .task-text');
-    if (activeTask) {
-      taskEl.textContent = activeTask.textContent;
+    const titleEl = document.querySelector('.task-item.active .task-title-text');
+    if (titleEl && titleEl.textContent) {
+      taskEl.textContent = titleEl.textContent;
       taskEl.classList.add('has-task');
     } else {
-      taskEl.textContent = '';
-      taskEl.classList.remove('has-task');
+      const activeTask = document.querySelector('.task-item.active .task-text');
+      if (activeTask && activeTask.firstChild) {
+        taskEl.textContent = activeTask.firstChild.textContent || '';
+        taskEl.classList.add('has-task');
+      } else {
+        taskEl.textContent = '';
+        taskEl.classList.remove('has-task');
+      }
     }
   }
 }
@@ -1719,16 +2112,22 @@ elements.form.addEventListener('submit', e => {
   e.preventDefault();
   const title = elements.taskInput.value.trim();
   const est = elements.estPomodorosInput.value;
+  const catId = state.selectedCategoryFilter && state.selectedCategoryFilter !== 'all' ? state.selectedCategoryFilter : elements.taskCategorySelect ? elements.taskCategorySelect.value : '';
   if (title) {
-    addTask(title, est);
+    addTask(title, est, catId);
     elements.taskInput.value = '';
     elements.estPomodorosInput.value = '1';
     elements.taskInput.focus();
     updateActiveTaskDisplay();
   }
 });
-elements.taskList.addEventListener('click', e => {
+elements.taskList.addEventListener('click', async e => {
   const target = e.target;
+  const categoryBtn = target.closest('[data-action="change-category"]');
+  if (categoryBtn && categoryBtn.dataset.id) {
+    showCategoryPicker(categoryBtn, categoryBtn.dataset.id);
+    return;
+  }
   const checkBtn = target.closest('[data-action="toggle"]');
   if (checkBtn && checkBtn.dataset.id) {
     toggleTaskComplete(checkBtn.dataset.id);
@@ -1739,6 +2138,27 @@ elements.taskList.addEventListener('click', e => {
   if (contentBtn && contentBtn.dataset.id) {
     setActiveTask(contentBtn.dataset.id);
     updateActiveTaskDisplay();
+    return;
+  }
+  const archiveBtn = target.closest('[data-action="archive"]');
+  if (archiveBtn && archiveBtn.dataset.id) {
+    archiveTask(archiveBtn.dataset.id);
+    updateActiveTaskDisplay();
+    return;
+  }
+  const restoreBtn = target.closest('[data-action="restore"]');
+  if (restoreBtn && restoreBtn.dataset.id) {
+    restoreTask(restoreBtn.dataset.id);
+    updateActiveTaskDisplay();
+    return;
+  }
+  const deletePermBtn = target.closest('[data-action="delete-permanent"]');
+  if (deletePermBtn && deletePermBtn.dataset.id) {
+    const confirmed = await customConfirm('Bạn có chắc muốn xóa vĩnh viễn task này không? Thao tác này không thể hoàn tác.');
+    if (confirmed) {
+      deletePermanently(deletePermBtn.dataset.id);
+      updateActiveTaskDisplay();
+    }
     return;
   }
   const deleteBtn = target.closest('[data-action="delete"]');
@@ -1764,24 +2184,235 @@ elements.inputs.volume.addEventListener('input', e => {
 // ... PiP Listener ...
 elements.pipBtn.addEventListener('click', togglePiP);
 
+// Inline Category Picker Popover
+let activeCategoryPicker = null;
+let popoverCleanup = null;
+function closeCategoryPicker() {
+  if (popoverCleanup) {
+    popoverCleanup();
+    popoverCleanup = null;
+  }
+  if (activeCategoryPicker) {
+    activeCategoryPicker.remove();
+    activeCategoryPicker = null;
+  }
+}
+function showCategoryPicker(anchorEl, taskId) {
+  closeCategoryPicker();
+  const picker = document.createElement('div');
+  picker.className = 'category-picker-popover';
+  state.categories.forEach(cat => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'category-picker-item';
+    const safeName = escapeHtml(cat.name);
+    item.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+    item.onclick = e => {
+      e.stopPropagation();
+      updateTaskCategory(taskId, cat.id);
+      closeCategoryPicker();
+    };
+    picker.appendChild(item);
+  });
+  document.body.appendChild(picker);
+  activeCategoryPicker = picker;
+  const rect = anchorEl.getBoundingClientRect();
+  const pickerHeight = picker.offsetHeight || 150;
+  const top = rect.bottom + 6 + pickerHeight > window.innerHeight ? Math.max(10, rect.top - pickerHeight - 6) : rect.bottom + 6;
+  const left = Math.min(Math.max(10, rect.left), window.innerWidth - 180);
+  picker.style.top = `${top}px`;
+  picker.style.left = `${left}px`;
+  const startY = window.scrollY;
+  const onScroll = () => {
+    if (Math.abs(window.scrollY - startY) > 20) {
+      closeCategoryPicker();
+    }
+  };
+  const onResize = () => closeCategoryPicker();
+  window.addEventListener('scroll', onScroll, {
+    passive: true
+  });
+  window.addEventListener('resize', onResize, {
+    passive: true
+  });
+  popoverCleanup = () => {
+    window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('resize', onResize);
+  };
+}
+document.addEventListener('click', e => {
+  const target = e.target;
+  if (target.closest('[data-action="change-category"]')) {
+    return;
+  }
+  if (activeCategoryPicker && !activeCategoryPicker.contains(target)) {
+    closeCategoryPicker();
+  }
+});
+
+// Category Modal setup
+let selectedCategoryColor = CATEGORY_COLORS[0];
+function initCategoryModal() {
+  if (!elements.categoryColorOptions) return;
+  elements.categoryColorOptions.innerHTML = '';
+  CATEGORY_COLORS.forEach((color, idx) => {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = `color-swatch ${idx === 0 ? 'selected' : ''}`;
+    swatch.style.backgroundColor = color;
+    swatch.setAttribute('aria-label', `Color ${color}`);
+    swatch.onclick = () => {
+      elements.categoryColorOptions.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      swatch.classList.add('selected');
+      selectedCategoryColor = color;
+      updateCategoryModalPreview();
+    };
+    elements.categoryColorOptions.appendChild(swatch);
+  });
+  if (elements.categoryCloseBtn) {
+    elements.categoryCloseBtn.onclick = () => {
+      if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
+    };
+  }
+  if (elements.categoryCancelBtn) {
+    elements.categoryCancelBtn.onclick = () => {
+      if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
+    };
+  }
+  if (elements.categoryModal) {
+    elements.categoryModal.addEventListener('click', e => {
+      if (e.target === elements.categoryModal) elements.categoryModal.classList.add('hidden');
+    });
+  }
+  if (elements.categoryNameInput) {
+    elements.categoryNameInput.addEventListener('input', updateCategoryModalPreview);
+  }
+  if (elements.categorySaveBtn) {
+    elements.categorySaveBtn.onclick = () => {
+      const name = elements.categoryNameInput ? elements.categoryNameInput.value.trim() : '';
+      if (name) {
+        const newCat = addCategory(name, selectedCategoryColor);
+        if (newCat) {
+          if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
+          if (elements.categoryNameInput) elements.categoryNameInput.value = '';
+          updateCategoryModalPreview();
+        } else {
+          alert('Category name already exists or is invalid.');
+        }
+      }
+    };
+  }
+}
+function updateCategoryModalPreview() {
+  const previewBadge = document.getElementById('category-preview-badge');
+  const previewText = document.getElementById('category-preview-text');
+  const previewDot = previewBadge ? previewBadge.querySelector('.category-dot') : null;
+  const name = elements.categoryNameInput ? elements.categoryNameInput.value.trim() : '';
+  if (previewText) {
+    previewText.textContent = name || 'New Category';
+  }
+  if (previewDot) {
+    previewDot.style.backgroundColor = selectedCategoryColor;
+  }
+}
+
+// Archive Modal setup
+function initArchiveModal() {
+  if (elements.openArchiveBtn) {
+    elements.openArchiveBtn.addEventListener('click', () => {
+      if (elements.archiveSearchInput) elements.archiveSearchInput.value = '';
+      renderArchiveModal();
+      if (elements.archiveModal) elements.archiveModal.classList.remove('hidden');
+      if (elements.archiveSearchInput) elements.archiveSearchInput.focus();
+    });
+  }
+  if (elements.closeArchiveBtn) {
+    elements.closeArchiveBtn.addEventListener('click', () => {
+      if (elements.archiveModal) elements.archiveModal.classList.add('hidden');
+    });
+  }
+  if (elements.archiveModal) {
+    elements.archiveModal.addEventListener('click', e => {
+      if (e.target === elements.archiveModal) elements.archiveModal.classList.add('hidden');
+    });
+  }
+  if (elements.archiveEmptyBtn) {
+    elements.archiveEmptyBtn.addEventListener('click', async () => {
+      const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+      if (count === 0) return;
+      const confirmed = await customConfirm(`Toàn bộ ${count} công việc đã lưu trữ sẽ bị xóa vĩnh viễn khỏi thiết bị và không thể khôi phục lại.`, {
+        title: `Dọn sạch ${count} công việc?`,
+        confirmText: 'Xóa tất cả',
+        cancelText: 'Hủy bỏ',
+        isDanger: true
+      });
+      if (confirmed) {
+        emptyArchivedTasks();
+        updateActiveTaskDisplay();
+      }
+    });
+  }
+  if (elements.archiveSearchInput) {
+    elements.archiveSearchInput.addEventListener('input', () => {
+      renderArchiveModal(elements.archiveSearchInput.value);
+    });
+  }
+  if (elements.archiveTaskList) {
+    elements.archiveTaskList.addEventListener('click', async e => {
+      const target = e.target;
+      const restoreBtn = target.closest('[data-action="restore"]');
+      if (restoreBtn && restoreBtn.dataset.id) {
+        restoreTask(restoreBtn.dataset.id);
+        updateActiveTaskDisplay();
+        return;
+      }
+      const deletePermBtn = target.closest('[data-action="delete-permanent"]');
+      if (deletePermBtn && deletePermBtn.dataset.id) {
+        const confirmed = await customConfirm('Công việc này sẽ bị xóa hoàn toàn khỏi kho lưu trữ và không thể khôi phục lại.', {
+          title: 'Xóa vĩnh viễn công việc?',
+          confirmText: 'Xóa ngay',
+          cancelText: 'Hủy bỏ',
+          isDanger: true
+        });
+        if (confirmed) {
+          deletePermanently(deletePermBtn.dataset.id);
+          updateActiveTaskDisplay();
+        }
+        return;
+      }
+    });
+  }
+}
+
 // Global modal esc/click-outside handler
 document.addEventListener('keydown', e => {
   // Check if user is typing in an input or textarea
   const typing = isUserTyping(e);
   const isSettingsOpen = !elements.settingsModal.classList.contains('hidden');
   const isAuthOpen = !elements.authModal.classList.contains('hidden');
+  const isCategoryOpen = elements.categoryModal && !elements.categoryModal.classList.contains('hidden');
+  const isArchiveOpen = elements.archiveModal && !elements.archiveModal.classList.contains('hidden');
+  const confirmModalEl = document.getElementById('confirm-modal');
+  const isConfirmOpen = confirmModalEl && !confirmModalEl.classList.contains('hidden');
   if (isSettingsOpen) {
     trapFocus(e, elements.settingsModal);
   } else if (isAuthOpen) {
     trapFocus(e, elements.authModal);
+  } else if (isCategoryOpen) {
+    trapFocus(e, elements.categoryModal);
+  } else if (isArchiveOpen) {
+    trapFocus(e, elements.archiveModal);
   }
   if (e.key === 'Escape') {
+    if (isConfirmOpen) return;
     if (isSettingsOpen) toggleSettingsModal(false);
     if (isAuthOpen) toggleAuthModal(false);
+    if (isCategoryOpen) elements.categoryModal.classList.add('hidden');
+    if (isArchiveOpen) elements.archiveModal.classList.add('hidden');
   }
 
   // Keyboard Shortcuts (only if not typing and no modifier keys and no modal open)
-  if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen) {
+  if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && !isSettingsOpen && !isAuthOpen && !isCategoryOpen && !isArchiveOpen && !isConfirmOpen) {
     if (e.code === 'Space' || e.key === ' ') {
       e.preventDefault();
       toggleTimer();
@@ -1814,6 +2445,9 @@ function init() {
   loadSettings();
   applyTheme();
   updateVolume();
+  loadCategories();
+  initCategoryModal();
+  initArchiveModal();
   loadTasks();
   updateActiveTaskDisplay();
   updateStatsUI();
