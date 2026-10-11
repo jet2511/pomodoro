@@ -486,13 +486,19 @@ export function updateActiveTaskDisplay(): void {
     }
     
     if (taskEl) {
-        const activeTask = document.querySelector('.task-item.active .task-text');
-        if (activeTask) {
-            taskEl.textContent = activeTask.textContent;
+        const titleEl = document.querySelector('.task-item.active .task-title-text');
+        if (titleEl && titleEl.textContent) {
+            taskEl.textContent = titleEl.textContent;
             taskEl.classList.add('has-task');
         } else {
-            taskEl.textContent = '';
-            taskEl.classList.remove('has-task');
+            const activeTask = document.querySelector('.task-item.active .task-text');
+            if (activeTask && activeTask.firstChild) {
+                taskEl.textContent = activeTask.firstChild.textContent || '';
+                taskEl.classList.add('has-task');
+            } else {
+                taskEl.textContent = '';
+                taskEl.classList.remove('has-task');
+            }
         }
     }
 }

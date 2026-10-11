@@ -75,5 +75,25 @@ export const elements = {
     timerSection: document.querySelector('.timer-section') as HTMLElement,
 
     // PiP
-    pipBtn: document.getElementById('pip-btn') as HTMLButtonElement
+    pipBtn: document.getElementById('pip-btn') as HTMLButtonElement,
+
+    // Categories
+    categoryFiltersContainer: document.getElementById('category-filters') as HTMLElement,
+    taskCategorySelect: document.getElementById('task-category-select') as HTMLSelectElement,
+    categoryModal: document.getElementById('category-modal') as HTMLElement,
+    categoryNameInput: document.getElementById('category-name-input') as HTMLInputElement,
+    categoryColorOptions: document.getElementById('category-color-options') as HTMLElement,
+    categorySaveBtn: document.getElementById('category-save-btn') as HTMLButtonElement,
+    categoryCancelBtn: document.getElementById('category-cancel-btn') as HTMLButtonElement,
+    categoryCloseBtn: document.getElementById('close-category-btn') as HTMLButtonElement,
+
+    // Archive
+    openArchiveBtn: document.getElementById('open-archive-btn') as HTMLButtonElement,
+    archiveCountBadge: document.getElementById('archive-count-badge') as HTMLElement,
+    archiveModal: document.getElementById('archive-modal') as HTMLElement,
+    archiveModalCount: document.getElementById('archive-modal-count') as HTMLElement,
+    closeArchiveBtn: document.getElementById('close-archive-btn') as HTMLButtonElement,
+    archiveEmptyBtn: document.getElementById('archive-empty-btn') as HTMLButtonElement,
+    archiveSearchInput: document.getElementById('archive-search-input') as HTMLInputElement,
+    archiveTaskList: document.getElementById('archive-task-list') as HTMLElement
 };

@@ -1,3 +1,10 @@
+export interface Category {
+    id: string;
+    name: string;
+    color: string;
+    isDefault?: boolean;
+}
+
 export interface Task {
     id: string;
     title: string;
@@ -5,6 +12,9 @@ export interface Task {
     actualPomodoros: number;
     isCompleted: boolean;
     isActive: boolean;
+    categoryId?: string;
+    isArchived?: boolean;
+    archivedAt?: number;
 }
 
 export interface Settings {
@@ -39,4 +49,6 @@ export interface State {
     activeTaskId: string | null;
     settings: Settings;
     focusHistory: FocusHistory;
+    categories: Category[];
+    selectedCategoryFilter: string;
 }

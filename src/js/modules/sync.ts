@@ -1,11 +1,13 @@
 import { User } from 'firebase/auth';
 import { getDbRef } from './firebase';
 import { state } from './state';
-import { saveTasks, renderTasks } from './tasks';
+import { elements } from './elements';
+import { saveTasks, renderTasks, renderArchiveModal } from './tasks';
 import { applySettingsToUI, applyTheme } from './settings';
 import { updateVolume } from './audio';
 import { setMode } from './timer';
 import { updateStatsUI } from './stats';
+import { saveCategories, renderCategoryFilters, renderCategoryOptions } from './categories';
 
 export const syncEvents = {
     onSyncStatusChange: (_status: 'syncing' | 'synced' | 'error' | 'none') => { }
@@ -31,6 +33,7 @@ export async function syncDataToCloud(user: User): Promise<void> {
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
             tasks: state.tasks,
+            categories: state.categories,
             settings: state.settings,
             focusHistory: state.focusHistory,
             lastSynced: serverTimestamp()
@@ -90,13 +93,26 @@ export async function setupRealtimeSync(user: User): Promise<void> {
                     });
                     
                     state.tasks = mergedTasks;
-                    const active = state.tasks.find(t => t.isActive);
+                    const active = state.tasks.find(t => t.isActive && !t.isArchived);
                     state.activeTaskId = active ? active.id : null;
                     
                     saveTasks();
                     renderTasks();
+
+                    if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
+                        const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
+                        renderArchiveModal(searchVal);
+                    }
                 }
                 
+                // Merge Categories
+                if (Array.isArray(data.categories)) {
+                    state.categories = data.categories;
+                    saveCategories();
+                    renderCategoryFilters();
+                    renderCategoryOptions();
+                }
+
                 // Merge Focus History
                 if (data.focusHistory && typeof data.focusHistory === 'object') {
                     state.focusHistory = { ...state.focusHistory, ...data.focusHistory };
