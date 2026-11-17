@@ -334,22 +334,6 @@ body.mode-longBreak .task-item.completed .task-check {
     color: #ef4444;
 }
 
-.archived-filter-btn {
-    border-style: dashed;
-}
-
-.task-item.archived {
-    opacity: 0.8;
-}
-
-.task-item.archived:hover {
-    opacity: 1;
-}
-
-.task-item.archived .task-title-text {
-    color: var(--clr-text-muted);
-}
-
 .task-item.dragging {
     opacity: 0.5;
     border: 2px dashed var(--clr-text);
@@ -374,17 +358,11 @@ body.mode-longBreak .task-item.completed .task-check {
 /* Category Filters Bar */
 .category-filters {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
-    overflow-x: auto;
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
     align-items: center;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.category-filters::-webkit-scrollbar {
-    display: none;
 }
 
 .category-filter-btn {
@@ -862,9 +840,9 @@ body.mode-longBreak .category-modal-content {
     gap: 0.35rem;
     padding: 0.35rem 0.7rem;
     border-radius: 6px;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #ef4444;
+    background: #991b1b;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
     font-family: inherit;
     font-size: 0.8rem;
     font-weight: 600;
@@ -873,9 +851,9 @@ body.mode-longBreak .category-modal-content {
 }
 
 .archive-btn-danger:hover {
-    background: #ef4444;
+    background: #7f1d1d;
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    box-shadow: 0 2px 8px rgba(127, 29, 29, 0.45);
 }
 
 /* Modal Body & Search */

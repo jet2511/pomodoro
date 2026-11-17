@@ -1,17 +1,21 @@
 import { User } from 'firebase/auth';
-import { initFirebase, getAuthRef, getGoogleProviderRef } from './firebase';
+import { initFirebaseAuth, getAuthRef, getGoogleProviderRef } from './firebase';
 import { elements } from './elements';
 import { setupRealtimeSync, unsubscribeRealtimeSync, syncEvents } from './sync';
 import { resetLocalState } from './state';
 import { renderTasks } from './tasks';
 import { updateStatsUI } from './stats';
-import { applySettingsToUI } from './settings';
+import { applySettingsToUI, applyTheme } from './settings';
+import { updateVolume } from './audio';
 import { loadCategories } from './categories';
+import { stopTimer, updateDisplay } from './timer';
+import { updateActiveTaskDisplay } from './pip';
+import { refreshIcons } from './icons';
 
 let currentUser: User | null = null;
 
 export async function initAuth(): Promise<void> {
-    await initFirebase();
+    await initFirebaseAuth();
     const auth = getAuthRef();
     if (!auth) return;
     
@@ -22,15 +26,13 @@ export async function initAuth(): Promise<void> {
         const wasLoggedIn = !!currentUser;
         currentUser = user;
         if (user) {
-            console.log("User logged in:", user.email);
             showLoggedInView(user);
-            if ((window as any).lucide) (window as any).lucide.createIcons();
+            refreshIcons();
             await setupRealtimeSync(user);
         } else {
-            console.log("User logged out");
             unsubscribeRealtimeSync();
             showLoggedOutView(wasLoggedIn);
-            if ((window as any).lucide) (window as any).lucide.createIcons();
+            refreshIcons();
         }
     });
 
@@ -85,11 +87,16 @@ function showLoggedOutView(shouldResetState: boolean = false): void {
     updateSyncUI('none');
 
     if (shouldResetState) {
+        stopTimer(false);
         resetLocalState();
         loadCategories();
         renderTasks();
         updateStatsUI();
         applySettingsToUI();
+        applyTheme();
+        updateVolume();
+        updateDisplay();
+        updateActiveTaskDisplay();
     }
 }
 
@@ -119,7 +126,7 @@ function showError(msg: string): void {
 }
 
 async function signInWithGoogle(): Promise<void> {
-    await initFirebase();
+    await initFirebaseAuth();
     const auth = getAuthRef();
     const provider = getGoogleProviderRef();
     if (!auth || !provider) return showError("Firebase credentials not configured.");
@@ -147,7 +154,7 @@ async function handleEmailAuth(e: Event, action: 'login' | 'register'): Promise<
         return;
     }
 
-    await initFirebase();
+    await initFirebaseAuth();
     const auth = getAuthRef();
     if (!auth) return showError("Firebase not configured");
 

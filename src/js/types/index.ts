@@ -3,6 +3,8 @@ export interface Category {
     name: string;
     color: string;
     isDefault?: boolean;
+    updatedAt?: number;
+    deletedAt?: number;
 }
 
 export interface Task {
@@ -15,6 +17,8 @@ export interface Task {
     categoryId?: string;
     isArchived?: boolean;
     archivedAt?: number;
+    updatedAt?: number;
+    deletedAt?: number;
 }
 
 export interface Settings {

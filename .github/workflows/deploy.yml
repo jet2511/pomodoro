@@ -4,13 +4,17 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - dev
+      - master
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
@@ -18,11 +22,36 @@ jobs:
       - name: Setup Node.js ⚙️
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Install and Verify 🔧
+        run: |
+          npm ci --ignore-scripts
+          npm run typecheck
+          npm run lint
+          npm run test:unit
+          npx playwright install --with-deps chromium
+          npm test
+          npm run build
+
+  deploy:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ⚙️
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Install and Build 🔧
         run: |
-          npm install
+          npm ci --ignore-scripts
           npm run build
 
       - name: Deploy 🚀
