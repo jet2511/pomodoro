@@ -1,16 +1,17 @@
 import { elements } from './modules/elements';
 import { loadSettings, stateEvents } from './modules/state';
 import { setMode, toggleTimer, skipPhase, timerEvents } from './modules/timer';
-import { loadTasks, addTask, toggleTaskComplete, setActiveTask, deleteTask, archiveTask, restoreTask, deletePermanently, emptyArchivedTasks, renderArchiveModal, updateTaskPomodoros, updateTaskCategory, taskEvents, getFirstIncompleteTask } from './modules/tasks';
+import { loadTasks, addTask, toggleTaskComplete, setActiveTask, archiveTask, restoreTask, deletePermanently, emptyArchivedTasks, renderArchiveModal, updateTaskPomodoros, updateTaskCategory, taskEvents, getFirstIncompleteTask } from './modules/tasks';
 import { toggleSettingsModal, saveSettings, applyTheme } from './modules/settings';
-import { updateVolume } from './modules/audio';
+import { updateVolume, previewAlarm } from './modules/audio';
 import { initAuth, toggleAuthModal, getCurrentUser } from './modules/auth';
-import { syncDataToCloud } from './modules/sync';
+import { syncDataToCloud, markLocalChangesPending } from './modules/sync';
 import { updateStatsUI } from './modules/stats';
 import { initPiP, togglePiP, updateActiveTaskDisplay } from './modules/pip';
-import { isUserTyping, debounce, trapFocus, customConfirm, escapeHtml } from './modules/utils';
+import { isUserTyping, debounce, trapFocus, customConfirm, escapeHtml, sanitizeHexColor } from './modules/utils';
 import { loadCategories, addCategory, CATEGORY_COLORS } from './modules/categories';
 import { state } from './modules/state';
+import { refreshIcons } from './modules/icons';
 
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
@@ -22,7 +23,7 @@ timerEvents.onPomodoroStart = async () => {
     const task = getFirstIncompleteTask();
     
     if (task) {
-        const wantsToSelect = await customConfirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
+        const wantsToSelect = await customConfirm(`No task selected. Start working on "${task.title}"?`);
         if (wantsToSelect) {
             setActiveTask(task.id);
         }
@@ -100,35 +101,18 @@ elements.taskList.addEventListener('click', async (e: Event) => {
         updateActiveTaskDisplay();
         return;
     }
-
-    const restoreBtn = target.closest('[data-action="restore"]') as HTMLElement | null;
-    if (restoreBtn && restoreBtn.dataset.id) {
-        restoreTask(restoreBtn.dataset.id);
-        updateActiveTaskDisplay();
-        return;
-    }
-
-    const deletePermBtn = target.closest('[data-action="delete-permanent"]') as HTMLElement | null;
-    if (deletePermBtn && deletePermBtn.dataset.id) {
-        const confirmed = await customConfirm('Bạn có chắc muốn xóa vĩnh viễn task này không? Thao tác này không thể hoàn tác.');
-        if (confirmed) {
-            deletePermanently(deletePermBtn.dataset.id);
-            updateActiveTaskDisplay();
-        }
-        return;
-    }
-
-    const deleteBtn = target.closest('[data-action="delete"]') as HTMLElement | null;
-    if (deleteBtn && deleteBtn.dataset.id) {
-        deleteTask(deleteBtn.dataset.id);
-        updateActiveTaskDisplay();
-        return;
-    }
 });
 
 // ... Settings Event Listeners ...
 elements.settingsBtn.addEventListener('click', () => toggleSettingsModal(true));
 elements.closeSettingsBtn.addEventListener('click', () => toggleSettingsModal(false));
+document.getElementById('cancel-settings-btn')?.addEventListener('click', () => toggleSettingsModal(false));
+document.getElementById('test-alarm-btn')?.addEventListener('click', () => {
+    const sound = elements.inputs.alarmSound.value as 'bell' | 'bird' | 'digital';
+    const parsedVol = parseInt(elements.inputs.volume.value, 10);
+    const volume = Number.isNaN(parsedVol) ? 50 : parsedVol;
+    previewAlarm(sound, volume);
+});
 elements.saveSettingsBtn.addEventListener('click', () => {
     saveSettings();
     toggleSettingsModal(false);
@@ -137,6 +121,11 @@ elements.saveSettingsBtn.addEventListener('click', () => {
 elements.inputs.volume.addEventListener('input', (e: Event) => {
     const target = e.target as HTMLInputElement;
     elements.volumeDisplay.textContent = target.value;
+    target.style.setProperty('--volume-pct', `${target.value}%`);
+});
+
+elements.inputs.darkMode.addEventListener('change', () => {
+    applyTheme(elements.inputs.darkMode.checked);
 });
 
 // ... PiP Listener ...
@@ -163,12 +152,13 @@ function showCategoryPicker(anchorEl: HTMLElement, taskId: string): void {
     const picker = document.createElement('div');
     picker.className = 'category-picker-popover';
 
-    state.categories.forEach(cat => {
+    state.categories.filter(c => !c.deletedAt).forEach(cat => {
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'category-picker-item';
         const safeName = escapeHtml(cat.name);
-        item.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+        const safeColor = sanitizeHexColor(cat.color);
+        item.innerHTML = `<span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeName}</span>`;
         item.onclick = (e: MouseEvent) => {
             e.stopPropagation();
             updateTaskCategory(taskId, cat.id);
@@ -220,6 +210,12 @@ document.addEventListener('click', (e: Event) => {
 // Category Modal setup
 let selectedCategoryColor = CATEGORY_COLORS[0];
 
+function closeCategoryModal(): void {
+    if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
+    const errEl = document.getElementById('category-error-msg');
+    if (errEl) errEl.style.display = 'none';
+}
+
 function initCategoryModal(): void {
     if (!elements.categoryColorOptions) return;
     elements.categoryColorOptions.innerHTML = '';
@@ -239,39 +235,46 @@ function initCategoryModal(): void {
     });
 
     if (elements.categoryCloseBtn) {
-        elements.categoryCloseBtn.onclick = () => {
-            if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-        };
+        elements.categoryCloseBtn.onclick = closeCategoryModal;
     }
 
     if (elements.categoryCancelBtn) {
-        elements.categoryCancelBtn.onclick = () => {
-            if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-        };
+        elements.categoryCancelBtn.onclick = closeCategoryModal;
     }
 
     if (elements.categoryModal) {
         elements.categoryModal.addEventListener('click', (e: Event) => {
-            if (e.target === elements.categoryModal) elements.categoryModal.classList.add('hidden');
+            if (e.target === elements.categoryModal) closeCategoryModal();
         });
     }
 
     if (elements.categoryNameInput) {
-        elements.categoryNameInput.addEventListener('input', updateCategoryModalPreview);
+        elements.categoryNameInput.addEventListener('input', () => {
+            updateCategoryModalPreview();
+            const errEl = document.getElementById('category-error-msg');
+            if (errEl) errEl.style.display = 'none';
+        });
     }
 
     if (elements.categorySaveBtn) {
         elements.categorySaveBtn.onclick = () => {
             const name = elements.categoryNameInput ? elements.categoryNameInput.value.trim() : '';
-            if (name) {
-                const newCat = addCategory(name, selectedCategoryColor);
-                if (newCat) {
-                    if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-                    if (elements.categoryNameInput) elements.categoryNameInput.value = '';
-                    updateCategoryModalPreview();
-                } else {
-                    alert('Category name already exists or is invalid.');
+            const errEl = document.getElementById('category-error-msg');
+            if (!name) {
+                if (errEl) {
+                    errEl.textContent = 'Please enter a category name.';
+                    errEl.style.display = 'block';
                 }
+                return;
+            }
+            const newCat = addCategory(name, selectedCategoryColor);
+            if (newCat) {
+                closeCategoryModal();
+                if (elements.categoryNameInput) elements.categoryNameInput.value = '';
+                updateCategoryModalPreview();
+            } else if (errEl) {
+                errEl.textContent = 'Category name already exists or is invalid.';
+                errEl.style.display = 'block';
             }
         };
     }
@@ -315,14 +318,14 @@ function initArchiveModal(): void {
 
     if (elements.archiveEmptyBtn) {
         elements.archiveEmptyBtn.addEventListener('click', async () => {
-            const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+            const count = state.tasks ? state.tasks.filter(t => t.isArchived && !t.deletedAt).length : 0;
             if (count === 0) return;
             const confirmed = await customConfirm(
-                `Toàn bộ ${count} công việc đã lưu trữ sẽ bị xóa vĩnh viễn khỏi thiết bị và không thể khôi phục lại.`,
+                `All ${count} archived ${count === 1 ? 'task' : 'tasks'} will be permanently deleted and cannot be recovered.`,
                 {
-                    title: `Dọn sạch ${count} công việc?`,
-                    confirmText: 'Xóa tất cả',
-                    cancelText: 'Hủy bỏ',
+                    title: `Clear ${count} archived ${count === 1 ? 'task' : 'tasks'}?`,
+                    confirmText: 'Delete All',
+                    cancelText: 'Cancel',
                     isDanger: true
                 }
             );
@@ -352,11 +355,11 @@ function initArchiveModal(): void {
             const deletePermBtn = target.closest('[data-action="delete-permanent"]') as HTMLElement | null;
             if (deletePermBtn && deletePermBtn.dataset.id) {
                 const confirmed = await customConfirm(
-                    'Công việc này sẽ bị xóa hoàn toàn khỏi kho lưu trữ và không thể khôi phục lại.',
+                    'This task will be permanently deleted from the archive and cannot be recovered.',
                     {
-                        title: 'Xóa vĩnh viễn công việc?',
-                        confirmText: 'Xóa ngay',
-                        cancelText: 'Hủy bỏ',
+                        title: 'Delete task permanently?',
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel',
                         isDanger: true
                     }
                 );
@@ -396,7 +399,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
         if (isConfirmOpen) return;
         if (isSettingsOpen) toggleSettingsModal(false);
         if (isAuthOpen) toggleAuthModal(false);
-        if (isCategoryOpen) elements.categoryModal.classList.add('hidden');
+        if (isCategoryOpen) closeCategoryModal();
         if (isArchiveOpen) elements.archiveModal.classList.add('hidden');
     }
 
@@ -443,7 +446,7 @@ function init(): void {
     updateStatsUI();
     setMode('pomodoro');
     initPiP();
-    if ((window as any).lucide) (window as any).lucide.createIcons();
+    refreshIcons();
 
     // Centralized Syncing
     const debouncedSync = debounce(() => {
@@ -451,7 +454,10 @@ function init(): void {
         if (user) syncDataToCloud(user);
     }, 2000);
 
-    stateEvents.onStateChange = debouncedSync;
+    stateEvents.onStateChange = () => {
+        markLocalChangesPending();
+        debouncedSync();
+    };
 
     // Initialize Firebase Auth
     initAuth();

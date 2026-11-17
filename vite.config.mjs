@@ -20,7 +20,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png', 'audio/*.mp3'],
+      includeAssets: ['icons/*.png'],
       manifest: {
         name: 'FocusTimer',
         short_name: 'FocusTimer',

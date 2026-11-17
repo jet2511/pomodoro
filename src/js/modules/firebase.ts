@@ -18,24 +18,42 @@ let auth: Auth | null = null;
 let db: Firestore | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
-export async function initFirebase(): Promise<{ app: FirebaseApp, auth: Auth, db: Firestore, googleProvider: GoogleAuthProvider } | null> {
-    if (app && auth && db && googleProvider) return { app, auth, db, googleProvider };
+export async function initFirebaseAuth(): Promise<{ app: FirebaseApp, auth: Auth, googleProvider: GoogleAuthProvider } | null> {
+    if (app && auth && googleProvider) return { app, auth, googleProvider };
     try {
-        const [{ initializeApp }, { getAuth, GoogleAuthProvider: GAP }, { getFirestore }] = await Promise.all([
+        const [{ initializeApp }, { getAuth, GoogleAuthProvider: GAP }] = await Promise.all([
             import("firebase/app"),
-            import("firebase/auth"),
-            import("firebase/firestore")
+            import("firebase/auth")
         ]);
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        googleProvider = new GAP();
-        console.log("Firebase modular SDK initialized (Lazy Loaded).");
-        return { app, auth, db, googleProvider };
+        if (!app) app = initializeApp(firebaseConfig);
+        if (!auth) auth = getAuth(app);
+        if (!googleProvider) googleProvider = new GAP();
+        return { app, auth, googleProvider };
     } catch (e) {
-        console.error("Firebase initialization failed:", e);
+        console.error("Firebase Auth initialization failed:", e);
         return null;
     }
+}
+
+export async function initFirestore(): Promise<Firestore | null> {
+    if (db) return db;
+    try {
+        if (!app) await initFirebaseAuth();
+        if (!app) return null;
+        const { getFirestore } = await import("firebase/firestore");
+        db = getFirestore(app);
+        return db;
+    } catch (e) {
+        console.error("Firestore initialization failed:", e);
+        return null;
+    }
+}
+
+export async function initFirebase(): Promise<{ app: FirebaseApp, auth: Auth, db: Firestore, googleProvider: GoogleAuthProvider } | null> {
+    const authRes = await initFirebaseAuth();
+    const firestoreDb = await initFirestore();
+    if (!authRes || !firestoreDb) return null;
+    return { ...authRes, db: firestoreDb };
 }
 
 export function getAuthRef(): Auth | null { return auth; }

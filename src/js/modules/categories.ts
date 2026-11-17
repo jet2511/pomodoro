@@ -1,7 +1,7 @@
 import { state, notifyStateChange } from './state';
 import { elements } from './elements';
 import { Category } from '../types/index';
-import { escapeHtml } from './utils';
+import { escapeHtml, sanitizeHexColor } from './utils';
 
 export const DEFAULT_CATEGORIES: Category[] = [
     { id: 'cat_work', name: 'Work', color: '#4F46E5', isDefault: true },
@@ -43,26 +43,32 @@ export function loadCategories(): void {
     renderCategoryOptions();
 }
 
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function saveCategories(): void {
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    state.categories = state.categories.filter(c => !c.deletedAt || c.deletedAt > cutoff);
     localStorage.setItem('pomodoro_categories', JSON.stringify(state.categories));
 }
 
 export function getCategoryById(id?: string): Category {
-    if (!id) return state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
-    return state.categories.find(c => c.id === id) || state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+    const active = state.categories.filter(c => !c.deletedAt);
+    if (!id) return active.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+    return active.find(c => c.id === id) || active.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
 }
 
 export function addCategory(name: string, color: string): Category | null {
     const trimmed = name.trim().substring(0, 30);
     if (!trimmed) return null;
 
-    const exists = state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase());
+    const exists = state.categories.some(c => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase());
     if (exists) return null;
 
     const newCategory: Category = {
         id: 'cat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         name: trimmed,
-        color: color || '#6B7280'
+        color: sanitizeHexColor(color),
+        updatedAt: Date.now()
     };
 
     state.categories.push(newCategory);
@@ -75,17 +81,20 @@ export function addCategory(name: string, color: string): Category | null {
 }
 
 export function deleteCategory(id: string): boolean {
-    const cat = state.categories.find(c => c.id === id);
+    const cat = state.categories.find(c => c.id === id && !c.deletedAt);
     if (!cat || cat.isDefault) return false;
 
+    const now = Date.now();
     // Reassign tasks to general
     state.tasks.forEach(task => {
         if (task.categoryId === id) {
             task.categoryId = 'cat_general';
+            task.updatedAt = now;
         }
     });
 
-    state.categories = state.categories.filter(c => c.id !== id);
+    cat.deletedAt = now;
+    cat.updatedAt = now;
     if (state.selectedCategoryFilter === id) {
         state.selectedCategoryFilter = 'all';
     }
@@ -120,13 +129,14 @@ export function renderCategoryFilters(): void {
     elements.categoryFiltersContainer.appendChild(allBtn);
 
     // Specific category buttons
-    state.categories.forEach(cat => {
+    state.categories.filter(c => !c.deletedAt).forEach(cat => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `category-filter-btn ${state.selectedCategoryFilter === cat.id ? 'active' : ''}`;
         btn.setAttribute('data-category-id', cat.id);
         const safeName = escapeHtml(cat.name);
-        btn.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+        const safeColor = sanitizeHexColor(cat.color);
+        btn.innerHTML = `<span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeName}</span>`;
         btn.onclick = () => setCategoryFilter(cat.id);
         elements.categoryFiltersContainer.appendChild(btn);
     });
@@ -157,7 +167,7 @@ export function renderCategoryOptions(): void {
     }
     elements.taskCategorySelect.innerHTML = '';
 
-    state.categories.forEach(cat => {
+    state.categories.filter(c => !c.deletedAt).forEach(cat => {
         const opt = document.createElement('option');
         opt.value = cat.id;
         opt.textContent = cat.name;

@@ -13,12 +13,13 @@ export function applySettingsToUI(): void {
     elements.inputs.alarmSound.value = state.settings.alarmSound;
     elements.inputs.tickingSound.value = state.settings.tickingSound;
     elements.inputs.volume.value = String(state.settings.volume);
+    elements.inputs.volume.style.setProperty('--volume-pct', `${state.settings.volume}%`);
     elements.volumeDisplay.textContent = String(state.settings.volume);
     elements.inputs.darkMode.checked = state.settings.darkMode;
 }
 
-export function applyTheme(): void {
-    if (state.settings.darkMode) {
+export function applyTheme(darkMode: boolean = state.settings.darkMode): void {
+    if (darkMode) {
         elements.html.removeAttribute('data-theme');
     } else {
         elements.html.setAttribute('data-theme', 'light');
@@ -53,6 +54,8 @@ export function toggleSettingsModal(show: boolean): void {
         applySettingsToUI();
         elements.settingsModal.classList.remove('hidden');
     } else {
+        applyTheme();
+        updateVolume();
         elements.settingsModal.classList.add('hidden');
     }
 }

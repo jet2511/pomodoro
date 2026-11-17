@@ -7,23 +7,6 @@
     line-height: 1.4;
 }
 
-.dev-badge {
-    background: rgba(255, 165, 0, 0.15);
-    color: #ffa500;
-    padding: 0.5rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    text-align: center;
-    margin-bottom: 1.5rem;
-    border: 1px solid rgba(255, 165, 0, 0.3);
-    font-weight: 600;
-}
-
-:root[data-theme="light"] .dev-badge {
-    background: rgba(255, 152, 0, 0.1);
-    color: #e67e22;
-}
-
 .auth-provider-btn {
     width: 100%;
     padding: 0.75rem;
@@ -244,12 +227,6 @@
 }
 :root[data-theme="light"] .syncing { color: #fbc02d; }
 :root[data-theme="light"] .error { color: #d32f2f; }
-
-.sync-note {
-    font-size: 0.85rem;
-    color: var(--clr-text-muted);
-    font-weight: normal !important;
-}
 
 .danger-btn {
     border-color: rgba(255, 0, 0, 0.3) !important;

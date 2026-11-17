@@ -6,6 +6,14 @@ import { customConfirm } from './utils';
 let sessionStartTime: number | null = null;
 let sessionAccumulatedMs: number = 0;
 let targetEndTime: number | null = null;
+let autoStartTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function clearAutoStartTimeout(): void {
+    if (autoStartTimeoutId !== null) {
+        clearTimeout(autoStartTimeoutId);
+        autoStartTimeoutId = null;
+    }
+}
 
 export const timerEvents: {
     onPomodoroComplete: () => void;
@@ -16,12 +24,15 @@ export const timerEvents: {
 };
 
 // Progress Circle setup
-const radius = elements.progressCircle.r.baseVal.value;
+const radius = elements.progressCircle ? elements.progressCircle.r.baseVal.value : 113;
 const circumference = radius * 2 * Math.PI;
-elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-elements.progressCircle.style.strokeDashoffset = '0';
+if (elements.progressCircle) {
+    elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+    elements.progressCircle.style.strokeDashoffset = '0';
+}
 
 function setProgress(percent: number): void {
+    if (!elements.progressCircle) return;
     const offset = circumference - percent / 100 * circumference;
     elements.progressCircle.style.strokeDashoffset = String(offset);
 }
@@ -81,6 +92,7 @@ export async function setMode(mode: 'pomodoro' | 'shortBreak' | 'longBreak'): Pr
         stopTimer(false);
     }
 
+    clearAutoStartTimeout();
     sessionAccumulatedMs = 0;
     sessionStartTime = null;
 
@@ -165,7 +177,8 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-function stopTimer(completed: boolean = false): void {
+export function stopTimer(completed: boolean = false): void {
+    clearAutoStartTimeout();
     if (state.timerId) {
         clearInterval(state.timerId);
         state.timerId = null;
@@ -214,7 +227,7 @@ export async function skipPhase(): Promise<void> {
 
 function showNotification(title: string, body: string): void {
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, icon: 'favicon.ico' });
+        new Notification(title, { body, icon: 'icons/icon-192.png' });
     }
 }
 
@@ -252,7 +265,7 @@ function handleTimerComplete(isSkipped: boolean = false): void {
         }
 
         if (state.settings.autoStartBreaks) {
-            setTimeout(startTimer, 1000);
+            autoStartTimeoutId = setTimeout(startTimer, 1000);
         }
 
     } else {
@@ -260,7 +273,7 @@ function handleTimerComplete(isSkipped: boolean = false): void {
         setMode('pomodoro');
 
         if (state.settings.autoStartPomodoros) {
-            setTimeout(startTimer, 1000);
+            autoStartTimeoutId = setTimeout(startTimer, 1000);
         }
     }
 }

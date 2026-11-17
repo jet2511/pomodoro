@@ -82,22 +82,14 @@ test.describe('FocusTimer Advanced Features', () => {
     test('attempts Picture-in-Picture when supported', async ({ page }) => {
         await page.addInitScript(() => {
             window.__pipCalled = false;
+            window.__pipError = null;
             const mockPiP = {
                 requestWindow: async () => {
                     window.__pipCalled = true;
-                    // Mock PiP window body with necessary elements for styles/task update
-                    const pipBody = { 
-                        append: () => { }, 
-                        classList: { add: () => { } },
-                        className: ''
-                    };
+                    const pipDoc = document.implementation.createHTMLDocument('PiP');
                     return {
-                        document: {
-                            body: pipBody,
-                            head: { appendChild: () => { } },
-                            getElementById: (id) => id === 'pip-current-task' ? { textContent: '' } : null,
-                            styleSheets: []
-                        },
+                        document: pipDoc,
+                        closed: false,
                         addEventListener: () => { },
                         close: () => { },
                     };
@@ -115,6 +107,43 @@ test.describe('FocusTimer Advanced Features', () => {
         await page.click('#pip-btn');
         await page.waitForFunction(() => window.__pipCalled === true, { timeout: 5000 });
         await expect(page.evaluate(() => window.__pipCalled)).resolves.toBe(true);
+    });
+
+    test('syncs Light Mode theme into Picture-in-Picture window', async ({ page }) => {
+        await page.addInitScript(() => {
+            window.__pipWindow = null;
+            const mockPiP = {
+                requestWindow: async () => {
+                    const pipDoc = document.implementation.createHTMLDocument('PiP');
+                    const pipWin = {
+                        document: pipDoc,
+                        closed: false,
+                        addEventListener: () => { },
+                        close: () => { pipWin.closed = true; },
+                    };
+                    window.__pipWindow = pipWin;
+                    return pipWin;
+                }
+            };
+            Object.defineProperty(window, 'documentPictureInPicture', {
+                value: mockPiP,
+                configurable: true,
+                writable: true
+            });
+        });
+
+        await page.reload();
+        await page.click('#settings-btn');
+        await page.locator('#setting-darkMode + .slider').scrollIntoViewIfNeeded();
+        await page.locator('#setting-darkMode + .slider').click();
+        await page.click('#save-settings-btn');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+        await page.click('#pip-btn');
+        await page.waitForFunction(
+            () => window.__pipWindow?.document.documentElement.getAttribute('data-theme') === 'light',
+            { timeout: 5000 }
+        );
     });
 
     test('creates task with category and shows category badge', async ({ page }) => {
@@ -269,7 +298,7 @@ test.describe('FocusTimer Advanced Features', () => {
         // Task should be permanently deleted from modal
         await expect(archiveModal.locator('.archive-task-item')).toHaveCount(0);
         await expect(badge).toHaveText('0');
-        await expect(archiveModal.locator('.archive-empty-state')).toContainText('Chưa có công việc nào được lưu trữ.');
+        await expect(archiveModal.locator('.archive-empty-state')).toContainText('No archived tasks yet.');
 
         // Close modal and verify active list is also empty
         await page.locator('#close-archive-btn').click();
@@ -336,6 +365,32 @@ test.describe('FocusTimer Advanced Features', () => {
         // Ensure XSS was not triggered during task rendering
         const isXssStillTriggered = await page.evaluate(() => window.xss === 1);
         expect(isXssStillTriggered).toBe(false);
+    });
+
+    test('shows inline error on duplicate category name without alert', async ({ page }) => {
+        let dialogTriggered = false;
+        page.on('dialog', async dialog => {
+            dialogTriggered = true;
+            await dialog.dismiss();
+        });
+
+        await page.locator('.category-filter-add-btn').click();
+        await page.locator('#category-name-input').fill('Work');
+        await page.locator('#category-save-btn').click();
+
+        expect(dialogTriggered).toBe(false);
+        await expect(page.locator('#category-error-msg')).toBeVisible();
+        await expect(page.locator('#category-error-msg')).toContainText('already exists');
+    });
+
+    test('activates newly added task when all previous tasks are archived', async ({ page }) => {
+        await page.locator('#task-input').fill('First Task');
+        await page.locator('#task-input').press('Enter');
+        await page.locator('.task-item').first().locator('.archive-btn').click();
+
+        await page.locator('#task-input').fill('Second Task');
+        await page.locator('#task-input').press('Enter');
+        await expect(page.locator('.task-item').first()).toHaveClass(/active/);
     });
 });
 

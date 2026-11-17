@@ -74,6 +74,7 @@ export function saveSettings() {
 }
 
 export function resetLocalState() {
+    state.pomodorosCompleted = 0;
     state.tasks = [];
     state.activeTaskId = null;
     state.categories = [];

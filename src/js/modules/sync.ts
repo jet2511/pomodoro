@@ -1,5 +1,5 @@
 import { User } from 'firebase/auth';
-import { getDbRef } from './firebase';
+import { getDbRef, initFirestore } from './firebase';
 import { state } from './state';
 import { elements } from './elements';
 import { saveTasks, renderTasks, renderArchiveModal } from './tasks';
@@ -15,13 +15,40 @@ export const syncEvents = {
 
 let isSyncing = false;
 export let isLoadingFromCloud = false;
+let hasPendingLocalChanges = false;
 let unsubscribeSnapshot: (() => void) | null = null;
+
+export function markLocalChangesPending(): void {
+    hasPendingLocalChanges = true;
+}
+
+export function mergeByUpdatedAt<T extends { id: string; updatedAt?: number }>(
+    localItems: T[],
+    cloudItems: T[],
+    preferLocalOnEqual: boolean = false
+): T[] {
+    const merged = new Map<string, T>();
+    cloudItems.forEach(item => merged.set(item.id, item));
+    localItems.forEach(localItem => {
+        const cloudItem = merged.get(localItem.id);
+        if (!cloudItem) {
+            merged.set(localItem.id, localItem);
+            return;
+        }
+        const localTs = localItem.updatedAt ?? 0;
+        const cloudTs = cloudItem.updatedAt ?? 0;
+        if (localTs > cloudTs || (preferLocalOnEqual && localTs === cloudTs)) {
+            merged.set(localItem.id, localItem);
+        }
+    });
+    return Array.from(merged.values());
+}
 
 export async function syncDataToCloud(user: User): Promise<void> {
     if (!user || isSyncing || isLoadingFromCloud) return;
     isSyncing = true;
     
-    const db = getDbRef();
+    const db = getDbRef() || await initFirestore();
     if (!db) {
         isSyncing = false;
         return;
@@ -38,8 +65,8 @@ export async function syncDataToCloud(user: User): Promise<void> {
             focusHistory: state.focusHistory,
             lastSynced: serverTimestamp()
         }, { merge: true });
+        hasPendingLocalChanges = false;
         syncEvents.onSyncStatusChange('synced');
-        console.log("Data synced to cloud successfully.");
     } catch (e) {
         syncEvents.onSyncStatusChange('error');
         console.error("Error syncing to cloud:", e);
@@ -50,7 +77,7 @@ export async function syncDataToCloud(user: User): Promise<void> {
 
 export async function setupRealtimeSync(user: User): Promise<void> {
     if (!user) return;
-    const db = getDbRef();
+    const db = getDbRef() || await initFirestore();
     if (!db) return;
 
     if (unsubscribeSnapshot) {
@@ -67,60 +94,53 @@ export async function setupRealtimeSync(user: User): Promise<void> {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 isLoadingFromCloud = true;
-                
-                // Merge Settings
-                if (data.settings && typeof data.settings === 'object') {
-                    state.settings = { ...state.settings, ...data.settings };
-                    applySettingsToUI();
-                    applyTheme();
-                    updateVolume();
-                    if (!state.isRunning) {
-                        setMode(state.mode);
-                    }
-                }
-                
-                // Merge Tasks (Smart Union)
-                if (Array.isArray(data.tasks)) {
-                    const localTasks = state.tasks;
-                    const cloudTasks = data.tasks;
-                    const cloudTaskIds = new Set(cloudTasks.map(t => t.id));
-                    
-                    const mergedTasks = [...cloudTasks];
-                    localTasks.forEach(t => {
-                        if (!cloudTaskIds.has(t.id)) {
-                            mergedTasks.push(t);
+                try {
+                    // Merge Settings (skip overwrite while local changes are pending)
+                    if (!hasPendingLocalChanges && data.settings && typeof data.settings === 'object') {
+                        state.settings = { ...state.settings, ...data.settings };
+                        applySettingsToUI();
+                        applyTheme();
+                        updateVolume();
+                        if (!state.isRunning) {
+                            setMode(state.mode);
                         }
-                    });
-                    
-                    state.tasks = mergedTasks;
-                    const active = state.tasks.find(t => t.isActive && !t.isArchived);
-                    state.activeTaskId = active ? active.id : null;
-                    
-                    saveTasks();
-                    renderTasks();
-
-                    if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
-                        const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
-                        renderArchiveModal(searchVal);
                     }
-                }
-                
-                // Merge Categories
-                if (Array.isArray(data.categories)) {
-                    state.categories = data.categories;
-                    saveCategories();
-                    renderCategoryFilters();
-                    renderCategoryOptions();
-                }
 
-                // Merge Focus History
-                if (data.focusHistory && typeof data.focusHistory === 'object') {
-                    state.focusHistory = { ...state.focusHistory, ...data.focusHistory };
-                    updateStatsUI();
+                    // Merge Tasks (LWW by updatedAt)
+                    if (Array.isArray(data.tasks)) {
+                        state.tasks = mergeByUpdatedAt(state.tasks, data.tasks, hasPendingLocalChanges);
+                        const active = state.tasks.find(t => t.isActive && !t.isArchived && !t.deletedAt);
+                        state.activeTaskId = active ? active.id : null;
+
+                        saveTasks();
+                        renderTasks();
+
+                        if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
+                            const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
+                            renderArchiveModal(searchVal);
+                        }
+                    }
+
+                    // Merge Categories (LWW by updatedAt)
+                    if (Array.isArray(data.categories)) {
+                        state.categories = mergeByUpdatedAt(state.categories, data.categories, hasPendingLocalChanges);
+                        saveCategories();
+                        renderCategoryFilters();
+                        renderCategoryOptions();
+                    }
+
+                    // Merge Focus History (preserve local entries if pending)
+                    if (data.focusHistory && typeof data.focusHistory === 'object') {
+                        state.focusHistory = hasPendingLocalChanges
+                            ? { ...data.focusHistory, ...state.focusHistory }
+                            : { ...state.focusHistory, ...data.focusHistory };
+                        updateStatsUI();
+                    }
+
+                    syncEvents.onSyncStatusChange('synced');
+                } finally {
+                    isLoadingFromCloud = false;
                 }
-                
-                syncEvents.onSyncStatusChange('synced');
-                isLoadingFromCloud = false;
             }
         }, (err) => {
             console.error("Realtime sync error:", err);
@@ -132,6 +152,7 @@ export async function setupRealtimeSync(user: User): Promise<void> {
 }
 
 export function unsubscribeRealtimeSync(): void {
+    hasPendingLocalChanges = false;
     if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
         unsubscribeSnapshot = null;

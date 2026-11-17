@@ -97,6 +97,11 @@ export async function togglePiP(): Promise<void> {
 
                 const updateUI = () => {
                     if (!pipWindow || pipWindow.closed) return;
+                    if (state.settings.darkMode) {
+                        pipWindow.document.documentElement.removeAttribute('data-theme');
+                    } else {
+                        pipWindow.document.documentElement.setAttribute('data-theme', 'light');
+                    }
                     const currentMode = document.body.className.split(' ').find(c => c.startsWith('mode-')) || 'mode-pomodoro';
                     pipWindow.document.body.className = `pip-body ${currentMode}`;
                     
@@ -129,7 +134,7 @@ export async function togglePiP(): Promise<void> {
                 const taskObserver = new MutationObserver(updateActiveTaskDisplay);
                 const taskList = document.getElementById('task-list');
                 if (taskList) {
-                    taskObserver.observe(taskList, { subtree: true, attributes: true, attributeFilter: ['class'] });
+                    taskObserver.observe(taskList, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
                     pipCleanups.push(() => taskObserver.disconnect());
                 }
 
@@ -148,9 +153,9 @@ export async function togglePiP(): Promise<void> {
                 const playPauseBtn = overlay.querySelector('.play-pause-btn') as HTMLElement;
                 const skipBtn = overlay.querySelector('.skip-btn') as HTMLElement;
                 
-                const playPauseClick = (e: Event) => {
+                const playPauseClick = async (e: Event) => {
                     e.stopPropagation();
-                    toggleTimer();
+                    await toggleTimer();
                     updateUI();
                 };
                 playPauseBtn.addEventListener('click', playPauseClick);
@@ -158,9 +163,10 @@ export async function togglePiP(): Promise<void> {
                     if (playPauseBtn) playPauseBtn.removeEventListener('click', playPauseClick);
                 });
 
-                const skipClick = (e: Event) => {
+                const skipClick = async (e: Event) => {
                     e.stopPropagation();
-                    skipPhase();
+                    await skipPhase();
+                    updateUI();
                 };
                 skipBtn.addEventListener('click', skipClick);
                 pipCleanups.push(() => {
@@ -201,14 +207,14 @@ export async function togglePiP(): Promise<void> {
                     });
                 };
 
-                const keydownHandler = (e: KeyboardEvent) => {
+                const keydownHandler = async (e: KeyboardEvent) => {
                     if (e.code === 'Space') {
                         e.preventDefault();
-                        toggleTimer();
+                        await toggleTimer();
                         updateUI();
                         showActionFeedback(state.isRunning ? 'play' : 'pause');
                     } else if (e.key.toLowerCase() === 's') {
-                        skipPhase();
+                        await skipPhase();
                         updateUI();
                         showActionFeedback('skip');
                     } else if (e.key.toLowerCase() === 'p') {
@@ -261,12 +267,6 @@ function taskLabelInitialParent(el: HTMLElement): ParentNode {
 function copyStyles(targetWindow: Window): void {
     const targetDoc = targetWindow.document;
 
-    // Font Awesome
-    const faLink = targetDoc.createElement('link');
-    faLink.rel = 'stylesheet';
-    faLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-    targetDoc.head.appendChild(faLink);
-
     // Main Styles
     Array.from(document.styleSheets).forEach((styleSheet) => {
         try {
@@ -301,10 +301,12 @@ function copyStyles(targetWindow: Window): void {
             width: 100vw !important;
             overflow: hidden !important;
             font-family: 'Inter', sans-serif !important;
-            color: white !important;
+            color: var(--clr-text) !important;
         }
         body.pip-body.mode-shortBreak { background-color: var(--clr-bg-short) !important; }
         body.pip-body.mode-longBreak { background-color: var(--clr-bg-long) !important; }
+        :root[data-theme="light"] .progress-ring__circle { stroke: #333 !important; }
+        :root[data-theme="light"] #current-task-display { color: #333 !important; background: rgba(0, 0, 0, 0.08) !important; }
         
         .timer-section {
             width: 100% !important; 
@@ -404,6 +406,7 @@ function copyStyles(targetWindow: Window): void {
             gap: min(3vmin, 8px) !important;
             cursor: pointer !important;
             pointer-events: auto !important;
+            color: white !important;
             transition: transform 0.2s ease !important;
         }
         .pip-control-icon:hover {
