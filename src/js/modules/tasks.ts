@@ -2,7 +2,9 @@ import { state, notifyStateChange } from './state';
 import { elements } from './elements';
 import { Task } from '../types/index';
 import { getCategoryById, categoryEvents } from './categories';
-import { escapeHtml } from './utils';
+import { escapeHtml, sanitizeHexColor } from './utils';
+
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const taskEvents = {
     onTaskActivated: () => { }
@@ -13,7 +15,7 @@ categoryEvents.onCategoryChanged = () => {
 };
 
 export function getFirstIncompleteTask(): Task | null {
-    return state.tasks.find(t => !t.isCompleted && !t.isArchived) || null;
+    return state.tasks.find(t => !t.isCompleted && !t.isArchived && !t.deletedAt) || null;
 }
 
 export function loadTasks(): void {
@@ -24,7 +26,7 @@ export function loadTasks(): void {
         } catch (e) {
             state.tasks = [];
         }
-        const active = state.tasks.find(t => t.isActive && !t.isArchived);
+        const active = state.tasks.find(t => t.isActive && !t.isArchived && !t.deletedAt);
         if (active) state.activeTaskId = active.id;
         else state.activeTaskId = null;
         renderTasks();
@@ -33,12 +35,14 @@ export function loadTasks(): void {
 }
 
 export function saveTasks(): void {
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    state.tasks = state.tasks.filter(t => !t.deletedAt || t.deletedAt > cutoff);
     localStorage.setItem('pomodoro_tasks', JSON.stringify(state.tasks));
 }
 
 export function addTask(title: string, estPomodoros: string | number, categoryId?: string): void {
     title = title.substring(0, 200);
-    const isFirstTask = state.tasks.length === 0;
+    const isFirstTask = !state.tasks.some(t => !t.isArchived && !t.isCompleted && !t.deletedAt);
     const taskId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
     
@@ -54,6 +58,7 @@ export function addTask(title: string, estPomodoros: string | number, categoryId
         }
     }
 
+    const now = Date.now();
     const newTask: Task = {
         id: taskId,
         title,
@@ -61,7 +66,8 @@ export function addTask(title: string, estPomodoros: string | number, categoryId
         actualPomodoros: 0,
         isCompleted: false,
         isActive: isFirstTask,
-        categoryId: selectedCategory
+        categoryId: selectedCategory,
+        updatedAt: now
     };
     if (isFirstTask) state.activeTaskId = newTask.id;
     state.tasks.push(newTask);
@@ -71,9 +77,10 @@ export function addTask(title: string, estPomodoros: string | number, categoryId
 }
 
 export function toggleTaskComplete(id: string): void {
-    const task = state.tasks.find(t => t.id === id);
+    const task = state.tasks.find(t => t.id === id && !t.deletedAt);
     if (task) {
         task.isCompleted = !task.isCompleted;
+        task.updatedAt = Date.now();
         if (task.isCompleted && task.isActive) {
             task.isActive = false;
             state.activeTaskId = null;
@@ -85,10 +92,17 @@ export function toggleTaskComplete(id: string): void {
 }
 
 export function setActiveTask(id: string): void {
-    const task = state.tasks.find(t => t.id === id);
+    const task = state.tasks.find(t => t.id === id && !t.deletedAt);
     if (task && !task.isCompleted) {
-        state.tasks.forEach(t => t.isActive = false);
+        const now = Date.now();
+        state.tasks.forEach(t => {
+            if (t.isActive) {
+                t.isActive = false;
+                t.updatedAt = now;
+            }
+        });
         task.isActive = true;
+        task.updatedAt = now;
         state.activeTaskId = id;
         saveTasks();
         renderTasks();
@@ -98,16 +112,14 @@ export function setActiveTask(id: string): void {
     }
 }
 
-export function deleteTask(id: string): void {
-    // Instead of deleting, archive the task
-    archiveTask(id);
-}
-
 export function archiveTask(id: string): void {
-    const task = state.tasks.find(t => t.id === id);
+    const task = state.tasks.find(t => t.id === id && !t.deletedAt);
     if (task) {
+        const now = Date.now();
         task.isArchived = true;
-        task.archivedAt = Date.now();
+        task.archivedAt = now;
+        task.isActive = false;
+        task.updatedAt = now;
         if (state.activeTaskId === id) {
             state.activeTaskId = null;
         }
@@ -119,9 +131,11 @@ export function archiveTask(id: string): void {
 }
 
 export function restoreTask(id: string): void {
-    const task = state.tasks.find(t => t.id === id);
+    const task = state.tasks.find(t => t.id === id && !t.deletedAt);
     if (task) {
         task.isArchived = false;
+        task.isActive = false;
+        task.updatedAt = Date.now();
         saveTasks();
         renderTasks();
         renderArchiveModal(elements.archiveSearchInput ? elements.archiveSearchInput.value : '');
@@ -130,7 +144,13 @@ export function restoreTask(id: string): void {
 }
 
 export function deletePermanently(id: string): void {
-    state.tasks = state.tasks.filter(t => t.id !== id);
+    const task = state.tasks.find(t => t.id === id);
+    if (task) {
+        const now = Date.now();
+        task.deletedAt = now;
+        task.updatedAt = now;
+        task.isActive = false;
+    }
     if (state.activeTaskId === id) {
         state.activeTaskId = null;
     }
@@ -141,7 +161,14 @@ export function deletePermanently(id: string): void {
 }
 
 export function emptyArchivedTasks(): void {
-    state.tasks = state.tasks.filter(t => !t.isArchived);
+    const now = Date.now();
+    state.tasks.forEach(t => {
+        if (t.isArchived && !t.deletedAt) {
+            t.deletedAt = now;
+            t.updatedAt = now;
+            t.isActive = false;
+        }
+    });
     saveTasks();
     renderTasks();
     renderArchiveModal();
@@ -149,7 +176,7 @@ export function emptyArchivedTasks(): void {
 }
 
 export function updateArchiveBadgeCount(): void {
-    const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+    const count = state.tasks ? state.tasks.filter(t => t.isArchived && !t.deletedAt).length : 0;
     if (elements.archiveCountBadge) {
         elements.archiveCountBadge.textContent = count.toString();
         if (count > 0) {
@@ -167,7 +194,7 @@ export function renderArchiveModal(searchQuery: string = ''): void {
     updateArchiveBadgeCount();
     if (!elements.archiveTaskList) return;
 
-    const archivedTasks = (state.tasks || []).filter(t => t.isArchived);
+    const archivedTasks = (state.tasks || []).filter(t => t.isArchived && !t.deletedAt);
     const query = searchQuery.trim().toLowerCase();
     const filtered = query
         ? archivedTasks.filter(t => t.title.toLowerCase().includes(query))
@@ -175,8 +202,8 @@ export function renderArchiveModal(searchQuery: string = ''): void {
 
     if (filtered.length === 0) {
         const emptyMsg = query
-            ? 'Không tìm thấy công việc phù hợp.'
-            : 'Chưa có công việc nào được lưu trữ.';
+            ? 'No matching archived tasks found.'
+            : 'No archived tasks yet.';
         elements.archiveTaskList.innerHTML = `
             <div class="archive-empty-state">
                 <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -199,6 +226,7 @@ export function renderArchiveModal(searchQuery: string = ''): void {
         const sanitizedTitle = escapeHtml(task.title);
         const cat = getCategoryById(task.categoryId);
         const safeCatName = escapeHtml(cat.name);
+        const safeColor = sanitizeHexColor(cat.color);
 
         item.innerHTML = `
             <div class="archive-task-check">
@@ -208,17 +236,17 @@ export function renderArchiveModal(searchQuery: string = ''): void {
                 <div class="archive-task-title">
                     <span class="task-title-text">${sanitizedTitle}</span>
                     <span class="task-category-badge-static">
-                        <span class="category-dot" style="background-color: ${cat.color}"></span>
+                        <span class="category-dot" style="background-color: ${safeColor}"></span>
                         <span>${safeCatName}</span>
                     </span>
                 </div>
                 <div class="archive-task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
             </div>
             <div class="archive-task-actions">
-                <button class="action-btn restore-btn" data-action="restore" data-id="${task.id}" title="Khôi phục về danh sách chính" aria-label="Restore task">
+                <button class="action-btn restore-btn" data-action="restore" data-id="${task.id}" title="Restore to task list" aria-label="Restore task">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 </button>
-                <button class="action-btn delete-btn delete-permanent-btn" data-action="delete-permanent" data-id="${task.id}" title="Xóa vĩnh viễn" aria-label="Delete permanently">
+                <button class="action-btn delete-btn delete-permanent-btn" data-action="delete-permanent" data-id="${task.id}" title="Delete permanently" aria-label="Delete permanently">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>
             </div>
@@ -228,9 +256,10 @@ export function renderArchiveModal(searchQuery: string = ''): void {
 }
 
 export function updateTaskCategory(taskId: string, categoryId: string): void {
-    const task = state.tasks.find(t => t.id === taskId);
+    const task = state.tasks.find(t => t.id === taskId && !t.deletedAt);
     if (task && task.categoryId !== categoryId) {
         task.categoryId = categoryId;
+        task.updatedAt = Date.now();
         saveTasks();
         renderTasks();
         notifyStateChange();
@@ -240,9 +269,10 @@ export function updateTaskCategory(taskId: string, categoryId: string): void {
 export function updateTaskPomodoros(): void {
     if (!state.activeTaskId) return;
 
-    const task = state.tasks.find(t => t.id === state.activeTaskId);
+    const task = state.tasks.find(t => t.id === state.activeTaskId && !t.deletedAt);
     if (task) {
         task.actualPomodoros++;
+        task.updatedAt = Date.now();
         saveTasks();
         renderTasks();
         notifyStateChange();
@@ -254,7 +284,7 @@ export function renderTasks(): void {
         elements.form.style.display = 'flex';
     }
 
-    const activeTasks = state.tasks.filter(t => !t.isArchived);
+    const activeTasks = state.tasks.filter(t => !t.isArchived && !t.deletedAt);
     const filteredTasks = state.selectedCategoryFilter === 'all'
         ? activeTasks
         : activeTasks.filter(t => (t.categoryId || 'cat_general') === state.selectedCategoryFilter);
@@ -288,12 +318,13 @@ export function renderTasks(): void {
         const sanitizedTitle = escapeHtml(task.title);
         const cat = getCategoryById(task.categoryId);
         const safeCatName = escapeHtml(cat.name);
-        const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
+        const safeColor = sanitizeHexColor(cat.color);
+        const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
         const titleWithBadge = `<span class="task-title-text">${sanitizedTitle}</span> ${categoryBadgeHtml}`;
         const statsText = `${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}`;
 
         const actionsHtml = `
-            <button class="action-btn archive-btn" data-action="archive" data-id="${task.id}" title="Lưu trữ công việc" aria-label="Archive Task">
+            <button class="action-btn archive-btn" data-action="archive" data-id="${task.id}" title="Archive task" aria-label="Archive Task">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </button>
         `;

@@ -18,6 +18,15 @@ export function escapeHtml(str: string): string {
 }
 
 /**
+ * Validates and sanitizes a hex color string to prevent style/HTML injection
+ */
+export function sanitizeHexColor(color: string | undefined, fallback: string = '#6B7280'): string {
+    if (!color) return fallback;
+    const trimmed = color.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
+}
+
+/**
  * Checks if the user is currently typing in an input, textarea or contenteditable element
  * @param {KeyboardEvent} e - Keyboard event
  * @returns {boolean}
@@ -86,6 +95,8 @@ export interface ConfirmOptions {
     isDanger?: boolean;
 }
 
+let activeConfirmCleanup: (() => void) | null = null;
+
 /**
  * Custom confirm modal
  * @param {string} message - Message to display
@@ -93,6 +104,10 @@ export interface ConfirmOptions {
  * @returns {Promise<boolean>}
  */
 export function customConfirm(message: string, options?: ConfirmOptions): Promise<boolean> {
+    if (activeConfirmCleanup) {
+        activeConfirmCleanup();
+    }
+
     return new Promise((resolve) => {
         const modal = document.getElementById('confirm-modal');
         const titleEl = document.getElementById('confirm-title');
@@ -102,15 +117,15 @@ export function customConfirm(message: string, options?: ConfirmOptions): Promis
         const iconWrap = document.getElementById('confirm-icon-wrap');
 
         if (!modal || !msgEl || !okBtn || !cancelBtn) {
-            // Fallback if modal not in DOM
             resolve(window.confirm(message));
             return;
         }
 
-        const isDanger = options?.isDanger ?? /xóa|delete|hủy|không thể hoàn tác/i.test(message);
-        const title = options?.title ?? (isDanger ? 'Xác nhận thao tác xóa' : 'Xác nhận thao tác');
-        const confirmText = options?.confirmText ?? (isDanger ? 'Xác nhận xóa' : 'Xác nhận');
-        const cancelText = options?.cancelText ?? 'Hủy bỏ';
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        const isDanger = options?.isDanger ?? /delete|remove|clear|cannot be undone/i.test(message);
+        const title = options?.title ?? (isDanger ? 'Confirm Delete' : 'Confirm Action');
+        const confirmText = options?.confirmText ?? (isDanger ? 'Delete' : 'Confirm');
+        const cancelText = options?.cancelText ?? 'Cancel';
 
         if (titleEl) titleEl.textContent = title;
         msgEl.textContent = message;
@@ -144,20 +159,39 @@ export function customConfirm(message: string, options?: ConfirmOptions): Promis
 
         modal.classList.remove('hidden');
 
+        let settled = false;
         const cleanup = () => {
             modal.classList.add('hidden');
             okBtn.removeEventListener('click', onOk);
             cancelBtn.removeEventListener('click', onCancel);
             document.removeEventListener('keydown', onKeyDown);
+            if (activeConfirmCleanup === cancelPending) {
+                activeConfirmCleanup = null;
+            }
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                previouslyFocused.focus();
+            }
         };
 
-        const onOk = () => { cleanup(); resolve(true); };
-        const onCancel = () => { cleanup(); resolve(false); };
+        const cancelPending = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(false);
+        };
+        activeConfirmCleanup = cancelPending;
+
+        const onOk = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(true);
+        };
+        const onCancel = () => cancelPending();
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 e.stopPropagation();
-                cleanup();
-                resolve(false);
+                cancelPending();
             }
         };
 

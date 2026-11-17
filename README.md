@@ -2,13 +2,10 @@
 
 > **Your ultimate productivity companion.** A minimalist, high-performance Pomodoro Timer with a "Smart Square" Picture-in-Picture widget, task management, and seamless cloud sync.
 
-![FocusTimer Preview](.system_generated/click_feedback/click_feedback_1773152882772.png)
-
 ## ✨ Killer Feature: Smart Square PiP
-Our **Picture-in-Picture (PiP)** mode isn't just a video; it's a **fully interactive 300x300 square widget**.
+Our **Picture-in-Picture (PiP)** mode isn't just a video; it's a **fully interactive 240x240 square widget**.
 - **Always on Top**: Keep your timer visible while working in other apps.
-- **Locked Aspect Ratio**: Stays a perfect square (300x300) even if you try to resize it.
-- **Interactive Controls**: Play/Pause directly from the PiP window.
+- **Interactive Controls**: Play/Pause and Skip directly from the PiP window.
 - **Task Integration**: The name of your active task is visible right inside the PiP circle.
 
 ---
@@ -24,7 +21,7 @@ npm install
 ```bash
 npm run dev
 ```
-Then visit `http://localhost:5173`
+Then visit `http://localhost:5173/pomodoro/`
 
 ### 3. Build for Production
 ```bash
@@ -52,7 +49,7 @@ npm run build
 | `Space` | Start / Stop Timer |
 | `S` | Skip to the next phase |
 | `P` | Toggle Picture-in-Picture (PiP) |
-| `T` | Open Task Modal |
+| `T` | Focus Add Task input |
 | `C` | Open Settings / Customization |
 
 ---
