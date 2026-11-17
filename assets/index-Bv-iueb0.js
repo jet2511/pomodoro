@@ -1,4 +1,4 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/index.esm-4RLeqIEj.js","assets/index.esm-CAx1feN0.js","assets/index.esm-DyNCCC9q.js","assets/index.esm-CTiHkmY2.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/index.esm-gNio_oX0.js","assets/index.esm-rsfy7El_.js","assets/index.esm-q9MtbEAm.js","assets/index.esm-Dm4YFhXn.js"])))=>i.map(i=>d[i]);
 true              &&(function polyfill() {
 	const relList = document.createElement("link").relList;
 	if (relList && relList.supports && relList.supports("modulepreload")) return;
@@ -195,6 +195,7 @@ function saveSettings$1() {
   }));
 }
 function resetLocalState() {
+  state.pomodorosCompleted = 0;
   state.tasks = [];
   state.activeTaskId = null;
   state.categories = [];
@@ -208,25 +209,159 @@ function resetLocalState() {
   localStorage.removeItem('pomodoro_settings');
 }
 
-function playAlarm() {
-  const alarmSound = state.settings.alarmSound;
+let audioCtx = null;
+let fallbackInterval = null;
+let noiseSource = null;
+function getAudioContext() {
+  if (typeof window === 'undefined') return null;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!audioCtx) audioCtx = new Ctx();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+function playFallbackAlarm(type, volumeOverride) {
+  const rawVol = volumeOverride ?? state.settings.volume;
+  if (rawVol <= 0) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const vol = Math.max(0.01, rawVol / 100 * 0.35);
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  if (type === 'bell') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.8);
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    osc.start(now);
+    osc.stop(now + 0.9);
+  } else if (type === 'bird') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1400, now);
+    osc.frequency.exponentialRampToValueAtTime(2200, now + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(1600, now + 0.3);
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.start(now);
+    osc.stop(now + 0.35);
+  } else {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(800, now);
+    gain.gain.setValueAtTime(vol * 0.5, now);
+    gain.gain.setValueAtTime(0.001, now + 0.15);
+    gain.gain.setValueAtTime(vol * 0.5, now + 0.25);
+    gain.gain.setValueAtTime(0.001, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.45);
+  }
+}
+function stopFallbackAmbient() {
+  if (fallbackInterval !== null) {
+    clearInterval(fallbackInterval);
+    fallbackInterval = null;
+  }
+  if (noiseSource) {
+    try {
+      noiseSource.stop();
+    } catch (_) {}
+    noiseSource.disconnect();
+    noiseSource = null;
+  }
+}
+function startFallbackAmbient(type) {
+  stopFallbackAmbient();
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const vol = Math.max(0.005, state.settings.volume / 100 * 0.15);
+  if (type === 'tick') {
+    fallbackInterval = setInterval(() => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1000, ctx.currentTime);
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.04);
+    }, 1000);
+  } else {
+    const bufferSize = ctx.sampleRate * 2;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 800;
+    const gain = ctx.createGain();
+    gain.gain.value = vol;
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+    noiseSource = src;
+  }
+}
+function previewAlarm(alarmSound, volume) {
   const sound = elements.sounds[alarmSound];
+  const clampedVol = Math.min(1, Math.max(0, volume / 100));
   if (sound) {
+    sound.volume = clampedVol;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      playFallbackAlarm(alarmSound, volume);
+      return;
+    }
     if (!sound.src && sound.dataset.src) {
       sound.src = sound.dataset.src;
       sound.load();
     }
     sound.currentTime = 0;
-    sound.play().catch(e => console.log('Audio blocked', e));
+    sound.play().catch(() => playFallbackAlarm(alarmSound, volume));
+  } else {
+    playFallbackAlarm(alarmSound, volume);
+  }
+}
+function playAlarm() {
+  const alarmSound = state.settings.alarmSound;
+  const sound = elements.sounds[alarmSound];
+  if (sound) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      playFallbackAlarm(alarmSound);
+      return;
+    }
+    if (!sound.src && sound.dataset.src) {
+      sound.src = sound.dataset.src;
+      sound.load();
+    }
+    sound.currentTime = 0;
+    sound.play().catch(() => playFallbackAlarm(alarmSound));
+  } else {
+    playFallbackAlarm(alarmSound);
   }
 }
 function toggleBackgroundSound(play) {
   if (elements.sounds.tick) elements.sounds.tick.pause();
   if (elements.sounds.rain) elements.sounds.rain.pause();
+  stopFallbackAmbient();
   if (play && state.settings.tickingSound !== 'none') {
     const tickingSound = state.settings.tickingSound;
-    // Since tickingSound can be 'none' | 'tick' | 'rain', and elements.sounds has keys bell, bird, digital, tick, rain.
     if (tickingSound === 'tick' || tickingSound === 'rain') {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        startFallbackAmbient(tickingSound);
+        return;
+      }
       const sound = elements.sounds[tickingSound];
       if (sound) {
         if (!sound.src && sound.dataset.src) {
@@ -234,7 +369,9 @@ function toggleBackgroundSound(play) {
           sound.load();
         }
         sound.loop = true;
-        sound.play().catch(e => console.log('Audio blocked', e));
+        sound.play().catch(() => startFallbackAmbient(tickingSound));
+      } else {
+        startFallbackAmbient(tickingSound);
       }
     }
   }
@@ -258,6 +395,15 @@ function updateVolume() {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/**
+ * Validates and sanitizes a hex color string to prevent style/HTML injection
+ */
+function sanitizeHexColor(color, fallback = '#6B7280') {
+  if (!color) return fallback;
+  const trimmed = color.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
 }
 
 /**
@@ -311,6 +457,8 @@ function trapFocus(e, modalElement) {
     }
   }
 }
+let activeConfirmCleanup = null;
+
 /**
  * Custom confirm modal
  * @param {string} message - Message to display
@@ -318,6 +466,9 @@ function trapFocus(e, modalElement) {
  * @returns {Promise<boolean>}
  */
 function customConfirm(message, options) {
+  if (activeConfirmCleanup) {
+    activeConfirmCleanup();
+  }
   return new Promise(resolve => {
     const modal = document.getElementById('confirm-modal');
     const titleEl = document.getElementById('confirm-title');
@@ -326,14 +477,14 @@ function customConfirm(message, options) {
     const cancelBtn = document.getElementById('confirm-cancel-btn');
     const iconWrap = document.getElementById('confirm-icon-wrap');
     if (!modal || !msgEl || !okBtn || !cancelBtn) {
-      // Fallback if modal not in DOM
       resolve(window.confirm(message));
       return;
     }
-    const isDanger = options?.isDanger ?? /xóa|delete|hủy|không thể hoàn tác/i.test(message);
-    const title = options?.title ?? (isDanger ? 'Xác nhận thao tác xóa' : 'Xác nhận thao tác');
-    const confirmText = options?.confirmText ?? (isDanger ? 'Xác nhận xóa' : 'Xác nhận');
-    const cancelText = options?.cancelText ?? 'Hủy bỏ';
+    const previouslyFocused = document.activeElement;
+    const isDanger = options?.isDanger ?? /delete|remove|clear|cannot be undone/i.test(message);
+    const title = options?.title ?? (isDanger ? 'Confirm Delete' : 'Confirm Action');
+    const confirmText = options?.confirmText ?? (isDanger ? 'Delete' : 'Confirm');
+    const cancelText = options?.cancelText ?? 'Cancel';
     if (titleEl) titleEl.textContent = title;
     msgEl.textContent = message;
     okBtn.textContent = confirmText;
@@ -363,25 +514,37 @@ function customConfirm(message, options) {
       }
     }
     modal.classList.remove('hidden');
+    let settled = false;
     const cleanup = () => {
       modal.classList.add('hidden');
       okBtn.removeEventListener('click', onOk);
       cancelBtn.removeEventListener('click', onCancel);
       document.removeEventListener('keydown', onKeyDown);
+      if (activeConfirmCleanup === cancelPending) {
+        activeConfirmCleanup = null;
+      }
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
     };
-    const onOk = () => {
-      cleanup();
-      resolve(true);
-    };
-    const onCancel = () => {
+    const cancelPending = () => {
+      if (settled) return;
+      settled = true;
       cleanup();
       resolve(false);
     };
+    activeConfirmCleanup = cancelPending;
+    const onOk = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(true);
+    };
+    const onCancel = () => cancelPending();
     const onKeyDown = e => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        cleanup();
-        resolve(false);
+        cancelPending();
       }
     };
     okBtn.addEventListener('click', onOk);
@@ -393,17 +556,27 @@ function customConfirm(message, options) {
 let sessionStartTime = null;
 let sessionAccumulatedMs = 0;
 let targetEndTime = null;
+let autoStartTimeoutId = null;
+function clearAutoStartTimeout() {
+  if (autoStartTimeoutId !== null) {
+    clearTimeout(autoStartTimeoutId);
+    autoStartTimeoutId = null;
+  }
+}
 const timerEvents = {
   onPomodoroComplete: () => {},
   onPomodoroStart: null // returns true if start should proceed
 };
 
 // Progress Circle setup
-const radius = elements.progressCircle.r.baseVal.value;
+const radius = elements.progressCircle ? elements.progressCircle.r.baseVal.value : 113;
 const circumference = radius * 2 * Math.PI;
-elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-elements.progressCircle.style.strokeDashoffset = '0';
+if (elements.progressCircle) {
+  elements.progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+  elements.progressCircle.style.strokeDashoffset = '0';
+}
 function setProgress(percent) {
+  if (!elements.progressCircle) return;
   const offset = circumference - percent / 100 * circumference;
   elements.progressCircle.style.strokeDashoffset = String(offset);
 }
@@ -461,6 +634,7 @@ async function setMode(mode) {
     }
     stopTimer(false);
   }
+  clearAutoStartTimeout();
   sessionAccumulatedMs = 0;
   sessionStartTime = null;
   state.mode = mode;
@@ -530,6 +704,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 function stopTimer(completed = false) {
+  clearAutoStartTimeout();
   if (state.timerId) {
     clearInterval(state.timerId);
     state.timerId = null;
@@ -572,7 +747,7 @@ function showNotification(title, body) {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, {
       body,
-      icon: 'favicon.ico'
+      icon: 'icons/icon-192.png'
     });
   }
 }
@@ -608,13 +783,13 @@ function handleTimerComplete(isSkipped = false) {
       setMode('shortBreak');
     }
     if (state.settings.autoStartBreaks) {
-      setTimeout(startTimer, 1000);
+      autoStartTimeoutId = setTimeout(startTimer, 1000);
     }
   } else {
     if (!isSkipped) showNotification('Break is over!', 'Time to focus.');
     setMode('pomodoro');
     if (state.settings.autoStartPomodoros) {
-      setTimeout(startTimer, 1000);
+      autoStartTimeoutId = setTimeout(startTimer, 1000);
     }
   }
 }
@@ -676,22 +851,27 @@ function loadCategories() {
   renderCategoryFilters();
   renderCategoryOptions();
 }
+const TOMBSTONE_TTL_MS$1 = 30 * 24 * 60 * 60 * 1000;
 function saveCategories() {
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS$1;
+  state.categories = state.categories.filter(c => !c.deletedAt || c.deletedAt > cutoff);
   localStorage.setItem('pomodoro_categories', JSON.stringify(state.categories));
 }
 function getCategoryById(id) {
-  if (!id) return state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
-  return state.categories.find(c => c.id === id) || state.categories.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+  const active = state.categories.filter(c => !c.deletedAt);
+  if (!id) return active.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
+  return active.find(c => c.id === id) || active.find(c => c.id === 'cat_general') || DEFAULT_CATEGORIES[3];
 }
 function addCategory(name, color) {
   const trimmed = name.trim().substring(0, 30);
   if (!trimmed) return null;
-  const exists = state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase());
+  const exists = state.categories.some(c => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase());
   if (exists) return null;
   const newCategory = {
     id: 'cat_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
     name: trimmed,
-    color: color || '#6B7280'
+    color: sanitizeHexColor(color),
+    updatedAt: Date.now()
   };
   state.categories.push(newCategory);
   saveCategories();
@@ -722,13 +902,14 @@ function renderCategoryFilters() {
   elements.categoryFiltersContainer.appendChild(allBtn);
 
   // Specific category buttons
-  state.categories.forEach(cat => {
+  state.categories.filter(c => !c.deletedAt).forEach(cat => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `category-filter-btn ${state.selectedCategoryFilter === cat.id ? 'active' : ''}`;
     btn.setAttribute('data-category-id', cat.id);
     const safeName = escapeHtml(cat.name);
-    btn.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+    const safeColor = sanitizeHexColor(cat.color);
+    btn.innerHTML = `<span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeName}</span>`;
     btn.onclick = () => setCategoryFilter(cat.id);
     elements.categoryFiltersContainer.appendChild(btn);
   });
@@ -757,7 +938,7 @@ function renderCategoryOptions() {
     state.categories = [...DEFAULT_CATEGORIES];
   }
   elements.taskCategorySelect.innerHTML = '';
-  state.categories.forEach(cat => {
+  state.categories.filter(c => !c.deletedAt).forEach(cat => {
     const opt = document.createElement('option');
     opt.value = cat.id;
     opt.textContent = cat.name;
@@ -768,6 +949,7 @@ function renderCategoryOptions() {
   });
 }
 
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const taskEvents = {
   onTaskActivated: () => {}
 };
@@ -775,7 +957,7 @@ categoryEvents.onCategoryChanged = () => {
   renderTasks();
 };
 function getFirstIncompleteTask() {
-  return state.tasks.find(t => !t.isCompleted && !t.isArchived) || null;
+  return state.tasks.find(t => !t.isCompleted && !t.isArchived && !t.deletedAt) || null;
 }
 function loadTasks() {
   const saved = localStorage.getItem('pomodoro_tasks');
@@ -785,18 +967,20 @@ function loadTasks() {
     } catch (e) {
       state.tasks = [];
     }
-    const active = state.tasks.find(t => t.isActive && !t.isArchived);
+    const active = state.tasks.find(t => t.isActive && !t.isArchived && !t.deletedAt);
     if (active) state.activeTaskId = active.id;else state.activeTaskId = null;
     renderTasks();
   }
   updateArchiveBadgeCount();
 }
 function saveTasks() {
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+  state.tasks = state.tasks.filter(t => !t.deletedAt || t.deletedAt > cutoff);
   localStorage.setItem('pomodoro_tasks', JSON.stringify(state.tasks));
 }
 function addTask(title, estPomodoros, categoryId) {
   title = title.substring(0, 200);
-  const isFirstTask = state.tasks.length === 0;
+  const isFirstTask = !state.tasks.some(t => !t.isArchived && !t.isCompleted && !t.deletedAt);
   const taskId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'task_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
   const est = typeof estPomodoros === 'string' ? parseInt(estPomodoros) : estPomodoros;
 
@@ -811,6 +995,7 @@ function addTask(title, estPomodoros, categoryId) {
       selectedCategory = 'cat_general';
     }
   }
+  const now = Date.now();
   const newTask = {
     id: taskId,
     title,
@@ -818,7 +1003,8 @@ function addTask(title, estPomodoros, categoryId) {
     actualPomodoros: 0,
     isCompleted: false,
     isActive: isFirstTask,
-    categoryId: selectedCategory
+    categoryId: selectedCategory,
+    updatedAt: now
   };
   if (isFirstTask) state.activeTaskId = newTask.id;
   state.tasks.push(newTask);
@@ -827,9 +1013,10 @@ function addTask(title, estPomodoros, categoryId) {
   notifyStateChange();
 }
 function toggleTaskComplete(id) {
-  const task = state.tasks.find(t => t.id === id);
+  const task = state.tasks.find(t => t.id === id && !t.deletedAt);
   if (task) {
     task.isCompleted = !task.isCompleted;
+    task.updatedAt = Date.now();
     if (task.isCompleted && task.isActive) {
       task.isActive = false;
       state.activeTaskId = null;
@@ -840,10 +1027,17 @@ function toggleTaskComplete(id) {
   }
 }
 function setActiveTask(id) {
-  const task = state.tasks.find(t => t.id === id);
+  const task = state.tasks.find(t => t.id === id && !t.deletedAt);
   if (task && !task.isCompleted) {
-    state.tasks.forEach(t => t.isActive = false);
+    const now = Date.now();
+    state.tasks.forEach(t => {
+      if (t.isActive) {
+        t.isActive = false;
+        t.updatedAt = now;
+      }
+    });
     task.isActive = true;
+    task.updatedAt = now;
     state.activeTaskId = id;
     saveTasks();
     renderTasks();
@@ -851,15 +1045,14 @@ function setActiveTask(id) {
     taskEvents.onTaskActivated();
   }
 }
-function deleteTask(id) {
-  // Instead of deleting, archive the task
-  archiveTask(id);
-}
 function archiveTask(id) {
-  const task = state.tasks.find(t => t.id === id);
+  const task = state.tasks.find(t => t.id === id && !t.deletedAt);
   if (task) {
+    const now = Date.now();
     task.isArchived = true;
-    task.archivedAt = Date.now();
+    task.archivedAt = now;
+    task.isActive = false;
+    task.updatedAt = now;
     if (state.activeTaskId === id) {
       state.activeTaskId = null;
     }
@@ -870,9 +1063,11 @@ function archiveTask(id) {
   }
 }
 function restoreTask(id) {
-  const task = state.tasks.find(t => t.id === id);
+  const task = state.tasks.find(t => t.id === id && !t.deletedAt);
   if (task) {
     task.isArchived = false;
+    task.isActive = false;
+    task.updatedAt = Date.now();
     saveTasks();
     renderTasks();
     renderArchiveModal(elements.archiveSearchInput ? elements.archiveSearchInput.value : '');
@@ -880,7 +1075,13 @@ function restoreTask(id) {
   }
 }
 function deletePermanently(id) {
-  state.tasks = state.tasks.filter(t => t.id !== id);
+  const task = state.tasks.find(t => t.id === id);
+  if (task) {
+    const now = Date.now();
+    task.deletedAt = now;
+    task.updatedAt = now;
+    task.isActive = false;
+  }
   if (state.activeTaskId === id) {
     state.activeTaskId = null;
   }
@@ -890,14 +1091,21 @@ function deletePermanently(id) {
   notifyStateChange();
 }
 function emptyArchivedTasks() {
-  state.tasks = state.tasks.filter(t => !t.isArchived);
+  const now = Date.now();
+  state.tasks.forEach(t => {
+    if (t.isArchived && !t.deletedAt) {
+      t.deletedAt = now;
+      t.updatedAt = now;
+      t.isActive = false;
+    }
+  });
   saveTasks();
   renderTasks();
   renderArchiveModal();
   notifyStateChange();
 }
 function updateArchiveBadgeCount() {
-  const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+  const count = state.tasks ? state.tasks.filter(t => t.isArchived && !t.deletedAt).length : 0;
   if (elements.archiveCountBadge) {
     elements.archiveCountBadge.textContent = count.toString();
     if (count > 0) {
@@ -913,11 +1121,11 @@ function updateArchiveBadgeCount() {
 function renderArchiveModal(searchQuery = '') {
   updateArchiveBadgeCount();
   if (!elements.archiveTaskList) return;
-  const archivedTasks = (state.tasks || []).filter(t => t.isArchived);
+  const archivedTasks = (state.tasks || []).filter(t => t.isArchived && !t.deletedAt);
   const query = searchQuery.trim().toLowerCase();
   const filtered = query ? archivedTasks.filter(t => t.title.toLowerCase().includes(query)) : archivedTasks;
   if (filtered.length === 0) {
-    const emptyMsg = query ? 'Không tìm thấy công việc phù hợp.' : 'Chưa có công việc nào được lưu trữ.';
+    const emptyMsg = query ? 'No matching archived tasks found.' : 'No archived tasks yet.';
     elements.archiveTaskList.innerHTML = `
             <div class="archive-empty-state">
                 <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -938,6 +1146,7 @@ function renderArchiveModal(searchQuery = '') {
     const sanitizedTitle = escapeHtml(task.title);
     const cat = getCategoryById(task.categoryId);
     const safeCatName = escapeHtml(cat.name);
+    const safeColor = sanitizeHexColor(cat.color);
     item.innerHTML = `
             <div class="archive-task-check">
                 <svg viewBox="0 0 448 512" width="12" height="12" fill="currentColor"><path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/></svg>
@@ -946,17 +1155,17 @@ function renderArchiveModal(searchQuery = '') {
                 <div class="archive-task-title">
                     <span class="task-title-text">${sanitizedTitle}</span>
                     <span class="task-category-badge-static">
-                        <span class="category-dot" style="background-color: ${cat.color}"></span>
+                        <span class="category-dot" style="background-color: ${safeColor}"></span>
                         <span>${safeCatName}</span>
                     </span>
                 </div>
                 <div class="archive-task-stats">${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}</div>
             </div>
             <div class="archive-task-actions">
-                <button class="action-btn restore-btn" data-action="restore" data-id="${task.id}" title="Khôi phục về danh sách chính" aria-label="Restore task">
+                <button class="action-btn restore-btn" data-action="restore" data-id="${task.id}" title="Restore to task list" aria-label="Restore task">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 </button>
-                <button class="action-btn delete-btn delete-permanent-btn" data-action="delete-permanent" data-id="${task.id}" title="Xóa vĩnh viễn" aria-label="Delete permanently">
+                <button class="action-btn delete-btn delete-permanent-btn" data-action="delete-permanent" data-id="${task.id}" title="Delete permanently" aria-label="Delete permanently">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>
             </div>
@@ -965,9 +1174,10 @@ function renderArchiveModal(searchQuery = '') {
   });
 }
 function updateTaskCategory(taskId, categoryId) {
-  const task = state.tasks.find(t => t.id === taskId);
+  const task = state.tasks.find(t => t.id === taskId && !t.deletedAt);
   if (task && task.categoryId !== categoryId) {
     task.categoryId = categoryId;
+    task.updatedAt = Date.now();
     saveTasks();
     renderTasks();
     notifyStateChange();
@@ -975,9 +1185,10 @@ function updateTaskCategory(taskId, categoryId) {
 }
 function updateTaskPomodoros() {
   if (!state.activeTaskId) return;
-  const task = state.tasks.find(t => t.id === state.activeTaskId);
+  const task = state.tasks.find(t => t.id === state.activeTaskId && !t.deletedAt);
   if (task) {
     task.actualPomodoros++;
+    task.updatedAt = Date.now();
     saveTasks();
     renderTasks();
     notifyStateChange();
@@ -987,7 +1198,7 @@ function renderTasks() {
   if (elements.form) {
     elements.form.style.display = 'flex';
   }
-  const activeTasks = state.tasks.filter(t => !t.isArchived);
+  const activeTasks = state.tasks.filter(t => !t.isArchived && !t.deletedAt);
   const filteredTasks = state.selectedCategoryFilter === 'all' ? activeTasks : activeTasks.filter(t => (t.categoryId || 'cat_general') === state.selectedCategoryFilter);
   updateArchiveBadgeCount();
   if (filteredTasks.length === 0) {
@@ -1013,11 +1224,12 @@ function renderTasks() {
     const sanitizedTitle = escapeHtml(task.title);
     const cat = getCategoryById(task.categoryId);
     const safeCatName = escapeHtml(cat.name);
-    const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    const safeColor = sanitizeHexColor(cat.color);
+    const categoryBadgeHtml = `<button type="button" class="task-category-badge" data-action="change-category" data-id="${task.id}" title="Click to change category" aria-label="Category: ${safeCatName}"><span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeCatName}</span><svg class="category-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg></button>`;
     const titleWithBadge = `<span class="task-title-text">${sanitizedTitle}</span> ${categoryBadgeHtml}`;
     const statsText = `${task.actualPomodoros} / ${task.estPomodoros} ${task.actualPomodoros === 1 && task.estPomodoros === 1 ? 'pomodoro' : 'pomodoros'}`;
     const actionsHtml = `
-            <button class="action-btn archive-btn" data-action="archive" data-id="${task.id}" title="Lưu trữ công việc" aria-label="Archive Task">
+            <button class="action-btn archive-btn" data-action="archive" data-id="${task.id}" title="Archive task" aria-label="Archive Task">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </button>
         `;
@@ -1119,11 +1331,12 @@ function applySettingsToUI() {
   elements.inputs.alarmSound.value = state.settings.alarmSound;
   elements.inputs.tickingSound.value = state.settings.tickingSound;
   elements.inputs.volume.value = String(state.settings.volume);
+  elements.inputs.volume.style.setProperty('--volume-pct', `${state.settings.volume}%`);
   elements.volumeDisplay.textContent = String(state.settings.volume);
   elements.inputs.darkMode.checked = state.settings.darkMode;
 }
-function applyTheme() {
-  if (state.settings.darkMode) {
+function applyTheme(darkMode = state.settings.darkMode) {
+  if (darkMode) {
     elements.html.removeAttribute('data-theme');
   } else {
     elements.html.setAttribute('data-theme', 'light');
@@ -1153,6 +1366,8 @@ function toggleSettingsModal(show) {
     applySettingsToUI();
     elements.settingsModal.classList.remove('hidden');
   } else {
+    applyTheme();
+    updateVolume();
     elements.settingsModal.classList.add('hidden');
   }
 }
@@ -1220,11 +1435,10 @@ let app = null;
 let auth = null;
 let db = null;
 let googleProvider = null;
-async function initFirebase() {
-  if (app && auth && db && googleProvider) return {
+async function initFirebaseAuth() {
+  if (app && auth && googleProvider) return {
     app,
     auth,
-    db,
     googleProvider
   };
   try {
@@ -1233,22 +1447,36 @@ async function initFirebase() {
     }, {
       getAuth,
       GoogleAuthProvider: GAP
-    }, {
-      getFirestore
-    }] = await Promise.all([__vitePreload(() => import('./index.esm-4RLeqIEj.js'),true              ?__vite__mapDeps([0,1]):void 0), __vitePreload(() => import('./index.esm-DyNCCC9q.js'),true              ?__vite__mapDeps([2,1]):void 0), __vitePreload(() => import('./index.esm-CTiHkmY2.js'),true              ?__vite__mapDeps([3,1]):void 0)]);
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    googleProvider = new GAP();
-    console.log("Firebase modular SDK initialized (Lazy Loaded).");
+    }] = await Promise.all([__vitePreload(() => import('./index.esm-gNio_oX0.js'),true              ?__vite__mapDeps([0,1]):void 0), __vitePreload(() => import('./index.esm-q9MtbEAm.js'),true              ?__vite__mapDeps([2,1]):void 0)]);
+    if (!app) app = initializeApp(firebaseConfig);
+    if (!auth) auth = getAuth(app);
+    if (!googleProvider) googleProvider = new GAP();
     return {
       app,
       auth,
-      db,
       googleProvider
     };
   } catch (e) {
-    console.error("Firebase initialization failed:", e);
+    console.error("Firebase Auth initialization failed:", e);
+    return null;
+  }
+}
+async function initFirestore() {
+  if (db) return db;
+  try {
+    if (!app) await initFirebaseAuth();
+    if (!app) return null;
+    const {
+      getFirestore
+    } = await __vitePreload(async () => { const {
+      getFirestore
+    } = await import('./index.esm-Dm4YFhXn.js');return {
+      getFirestore
+    }},true              ?__vite__mapDeps([3,1]):void 0);
+    db = getFirestore(app);
+    return db;
+  } catch (e) {
+    console.error("Firestore initialization failed:", e);
     return null;
   }
 }
@@ -1282,11 +1510,32 @@ const syncEvents = {
 };
 let isSyncing = false;
 let isLoadingFromCloud = false;
+let hasPendingLocalChanges = false;
 let unsubscribeSnapshot = null;
+function markLocalChangesPending() {
+  hasPendingLocalChanges = true;
+}
+function mergeByUpdatedAt(localItems, cloudItems, preferLocalOnEqual = false) {
+  const merged = new Map();
+  cloudItems.forEach(item => merged.set(item.id, item));
+  localItems.forEach(localItem => {
+    const cloudItem = merged.get(localItem.id);
+    if (!cloudItem) {
+      merged.set(localItem.id, localItem);
+      return;
+    }
+    const localTs = localItem.updatedAt ?? 0;
+    const cloudTs = cloudItem.updatedAt ?? 0;
+    if (localTs > cloudTs || preferLocalOnEqual && localTs === cloudTs) {
+      merged.set(localItem.id, localItem);
+    }
+  });
+  return Array.from(merged.values());
+}
 async function syncDataToCloud(user) {
   if (!user || isSyncing || isLoadingFromCloud) return;
   isSyncing = true;
-  const db = getDbRef();
+  const db = getDbRef() || (await initFirestore());
   if (!db) {
     isSyncing = false;
     return;
@@ -1301,7 +1550,7 @@ async function syncDataToCloud(user) {
       doc,
       setDoc,
       serverTimestamp
-    } = await import('./index.esm-CTiHkmY2.js');return {
+    } = await import('./index.esm-Dm4YFhXn.js');return {
       doc,
       setDoc,
       serverTimestamp
@@ -1316,8 +1565,8 @@ async function syncDataToCloud(user) {
     }, {
       merge: true
     });
+    hasPendingLocalChanges = false;
     syncEvents.onSyncStatusChange('synced');
-    console.log("Data synced to cloud successfully.");
   } catch (e) {
     syncEvents.onSyncStatusChange('error');
     console.error("Error syncing to cloud:", e);
@@ -1327,7 +1576,7 @@ async function syncDataToCloud(user) {
 }
 async function setupRealtimeSync(user) {
   if (!user) return;
-  const db = getDbRef();
+  const db = getDbRef() || (await initFirestore());
   if (!db) return;
   if (unsubscribeSnapshot) {
     unsubscribeSnapshot();
@@ -1340,7 +1589,7 @@ async function setupRealtimeSync(user) {
     } = await __vitePreload(async () => { const {
       doc,
       onSnapshot
-    } = await import('./index.esm-CTiHkmY2.js');return {
+    } = await import('./index.esm-Dm4YFhXn.js');return {
       doc,
       onSnapshot
     }},true              ?__vite__mapDeps([3,1]):void 0);
@@ -1350,61 +1599,57 @@ async function setupRealtimeSync(user) {
       if (docSnap.exists()) {
         const data = docSnap.data();
         isLoadingFromCloud = true;
-
-        // Merge Settings
-        if (data.settings && typeof data.settings === 'object') {
-          state.settings = {
-            ...state.settings,
-            ...data.settings
-          };
-          applySettingsToUI();
-          applyTheme();
-          updateVolume();
-          if (!state.isRunning) {
-            setMode(state.mode);
-          }
-        }
-
-        // Merge Tasks (Smart Union)
-        if (Array.isArray(data.tasks)) {
-          const localTasks = state.tasks;
-          const cloudTasks = data.tasks;
-          const cloudTaskIds = new Set(cloudTasks.map(t => t.id));
-          const mergedTasks = [...cloudTasks];
-          localTasks.forEach(t => {
-            if (!cloudTaskIds.has(t.id)) {
-              mergedTasks.push(t);
+        try {
+          // Merge Settings (skip overwrite while local changes are pending)
+          if (!hasPendingLocalChanges && data.settings && typeof data.settings === 'object') {
+            state.settings = {
+              ...state.settings,
+              ...data.settings
+            };
+            applySettingsToUI();
+            applyTheme();
+            updateVolume();
+            if (!state.isRunning) {
+              setMode(state.mode);
             }
-          });
-          state.tasks = mergedTasks;
-          const active = state.tasks.find(t => t.isActive && !t.isArchived);
-          state.activeTaskId = active ? active.id : null;
-          saveTasks();
-          renderTasks();
-          if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
-            const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
-            renderArchiveModal(searchVal);
           }
-        }
 
-        // Merge Categories
-        if (Array.isArray(data.categories)) {
-          state.categories = data.categories;
-          saveCategories();
-          renderCategoryFilters();
-          renderCategoryOptions();
-        }
+          // Merge Tasks (LWW by updatedAt)
+          if (Array.isArray(data.tasks)) {
+            state.tasks = mergeByUpdatedAt(state.tasks, data.tasks, hasPendingLocalChanges);
+            const active = state.tasks.find(t => t.isActive && !t.isArchived && !t.deletedAt);
+            state.activeTaskId = active ? active.id : null;
+            saveTasks();
+            renderTasks();
+            if (elements.archiveModal && !elements.archiveModal.classList.contains('hidden')) {
+              const searchVal = elements.archiveSearchInput ? elements.archiveSearchInput.value : '';
+              renderArchiveModal(searchVal);
+            }
+          }
 
-        // Merge Focus History
-        if (data.focusHistory && typeof data.focusHistory === 'object') {
-          state.focusHistory = {
-            ...state.focusHistory,
-            ...data.focusHistory
-          };
-          updateStatsUI();
+          // Merge Categories (LWW by updatedAt)
+          if (Array.isArray(data.categories)) {
+            state.categories = mergeByUpdatedAt(state.categories, data.categories, hasPendingLocalChanges);
+            saveCategories();
+            renderCategoryFilters();
+            renderCategoryOptions();
+          }
+
+          // Merge Focus History (preserve local entries if pending)
+          if (data.focusHistory && typeof data.focusHistory === 'object') {
+            state.focusHistory = hasPendingLocalChanges ? {
+              ...data.focusHistory,
+              ...state.focusHistory
+            } : {
+              ...state.focusHistory,
+              ...data.focusHistory
+            };
+            updateStatsUI();
+          }
+          syncEvents.onSyncStatusChange('synced');
+        } finally {
+          isLoadingFromCloud = false;
         }
-        syncEvents.onSyncStatusChange('synced');
-        isLoadingFromCloud = false;
       }
     }, err => {
       console.error("Realtime sync error:", err);
@@ -1415,185 +1660,10 @@ async function setupRealtimeSync(user) {
   }
 }
 function unsubscribeRealtimeSync() {
+  hasPendingLocalChanges = false;
   if (unsubscribeSnapshot) {
     unsubscribeSnapshot();
     unsubscribeSnapshot = null;
-  }
-}
-
-let currentUser = null;
-async function initAuth() {
-  await initFirebase();
-  const auth = getAuthRef();
-  if (!auth) return;
-  const {
-    onAuthStateChanged
-  } = await __vitePreload(async () => { const {
-    onAuthStateChanged
-  } = await import('./index.esm-DyNCCC9q.js');return {
-    onAuthStateChanged
-  }},true              ?__vite__mapDeps([2,1]):void 0);
-
-  // Listen for auth state changes
-  onAuthStateChanged(auth, async user => {
-    const wasLoggedIn = !!currentUser;
-    currentUser = user;
-    if (user) {
-      console.log("User logged in:", user.email);
-      showLoggedInView(user);
-      if (window.lucide) window.lucide.createIcons();
-      await setupRealtimeSync(user);
-    } else {
-      console.log("User logged out");
-      unsubscribeRealtimeSync();
-      showLoggedOutView(wasLoggedIn);
-      if (window.lucide) window.lucide.createIcons();
-    }
-  });
-
-  // Event Listeners
-  elements.authBtn.addEventListener('click', () => toggleAuthModal(true));
-  elements.closeAuthBtn.addEventListener('click', () => toggleAuthModal(false));
-  elements.googleLoginBtn.addEventListener('click', signInWithGoogle);
-  elements.emailLoginBtn.addEventListener('click', e => handleEmailAuth(e, 'login'));
-  elements.emailRegisterBtn.addEventListener('click', e => handleEmailAuth(e, 'register'));
-  syncEvents.onSyncStatusChange = status => {
-    updateSyncUI(status);
-  };
-  elements.logoutBtn.addEventListener('click', signOut);
-}
-function getCurrentUser() {
-  return currentUser;
-}
-function toggleAuthModal(show) {
-  if (show) {
-    elements.authErrorMsg.style.display = 'none';
-    elements.authModal.classList.remove('hidden');
-  } else {
-    elements.authModal.classList.add('hidden');
-  }
-}
-function showLoggedInView(user) {
-  elements.authLoggedOutView.style.display = 'none';
-  elements.authLoggedInView.style.display = 'block';
-  const displayName = user.displayName || 'Focus Timer User';
-  elements.userDisplayName.textContent = displayName;
-  elements.userEmail.textContent = user.email || '';
-  elements.authUsername.textContent = displayName.split(' ')[0];
-  elements.authUsername.style.display = 'inline';
-}
-function showLoggedOutView(shouldResetState = false) {
-  elements.authLoggedInView.style.display = 'none';
-  elements.authLoggedOutView.style.display = 'block';
-  elements.authEmail.value = '';
-  elements.authPassword.value = '';
-  elements.authUsername.style.display = 'none';
-  updateSyncUI('none');
-  if (shouldResetState) {
-    resetLocalState();
-    loadCategories();
-    renderTasks();
-    updateStatsUI();
-    applySettingsToUI();
-  }
-}
-function updateSyncUI(status) {
-  const indicator = elements.syncIndicator;
-  if (!indicator) return;
-  indicator.classList.remove('syncing', 'synced', 'error');
-  if (status === 'syncing') {
-    indicator.textContent = 'Syncing...';
-    indicator.classList.add('syncing');
-  } else if (status === 'synced') {
-    indicator.textContent = 'Synced';
-    indicator.classList.add('synced');
-  } else if (status === 'error') {
-    indicator.textContent = 'Sync Error';
-    indicator.classList.add('error');
-  } else if (status === 'none') {
-    indicator.textContent = 'Not Logged In';
-  }
-}
-function showError(msg) {
-  elements.authErrorMsg.textContent = msg;
-  elements.authErrorMsg.style.display = 'block';
-}
-async function signInWithGoogle() {
-  await initFirebase();
-  const auth = getAuthRef();
-  const provider = getGoogleProviderRef();
-  if (!auth || !provider) return showError("Firebase credentials not configured.");
-  const {
-    signInWithPopup
-  } = await __vitePreload(async () => { const {
-    signInWithPopup
-  } = await import('./index.esm-DyNCCC9q.js');return {
-    signInWithPopup
-  }},true              ?__vite__mapDeps([2,1]):void 0);
-  try {
-    await signInWithPopup(auth, provider);
-    toggleAuthModal(false);
-  } catch (error) {
-    if (error.code === 'auth/popup-closed-by-user') {
-      // Silently ignore user closing popup
-      return;
-    } else if (error.code === 'auth/popup-blocked') {
-      showError("Popup blocked by browser. Please allow popups for this site.");
-    } else {
-      showError(error.message || "Failed to sign in with Google.");
-    }
-  }
-}
-async function handleEmailAuth(e, action) {
-  e.preventDefault();
-  if (!elements.emailAuthForm.checkValidity()) {
-    elements.emailAuthForm.reportValidity();
-    return;
-  }
-  await initFirebase();
-  const auth = getAuthRef();
-  if (!auth) return showError("Firebase not configured");
-  const email = elements.authEmail.value;
-  const password = elements.authPassword.value;
-  const {
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword
-  } = await __vitePreload(async () => { const {
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword
-  } = await import('./index.esm-DyNCCC9q.js');return {
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword
-  }},true              ?__vite__mapDeps([2,1]):void 0);
-  try {
-    if (action === 'login') {
-      await signInWithEmailAndPassword(auth, email, password);
-    } else {
-      await createUserWithEmailAndPassword(auth, email, password);
-    }
-    toggleAuthModal(false);
-  } catch (error) {
-    let cleanMsg = "An error occurred. Please try again.";
-    if (error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') cleanMsg = "Invalid email or password.";else if (error.code === 'auth/too-many-requests') cleanMsg = "Too many attempts. Please try again later.";else if (error.code === 'auth/weak-password') cleanMsg = "Password is too weak. Must be at least 6 characters.";else if (error.code === 'auth/invalid-email') cleanMsg = "Invalid email format.";
-    showError(cleanMsg);
-  }
-}
-async function signOut() {
-  const auth = getAuthRef();
-  if (!auth) return;
-  const {
-    signOut: firebaseSignOut
-  } = await __vitePreload(async () => { const {
-    signOut: firebaseSignOut
-  } = await import('./index.esm-DyNCCC9q.js');return {
-    signOut: firebaseSignOut
-  }},true              ?__vite__mapDeps([2,1]):void 0);
-  try {
-    unsubscribeRealtimeSync();
-    await firebaseSignOut(auth);
-    toggleAuthModal(false);
-  } catch (error) {
-    console.error("Sign out error", error);
   }
 }
 
@@ -1682,6 +1752,11 @@ async function togglePiP() {
         pipWindow.document.body.appendChild(overlay);
         const updateUI = () => {
           if (!pipWindow || pipWindow.closed) return;
+          if (state.settings.darkMode) {
+            pipWindow.document.documentElement.removeAttribute('data-theme');
+          } else {
+            pipWindow.document.documentElement.setAttribute('data-theme', 'light');
+          }
           const currentMode = document.body.className.split(' ').find(c => c.startsWith('mode-')) || 'mode-pomodoro';
           pipWindow.document.body.className = `pip-body ${currentMode}`;
           if (timerDisplay) {
@@ -1712,6 +1787,7 @@ async function togglePiP() {
         const taskList = document.getElementById('task-list');
         if (taskList) {
           taskObserver.observe(taskList, {
+            childList: true,
             subtree: true,
             attributes: true,
             attributeFilter: ['class']
@@ -1730,18 +1806,19 @@ async function togglePiP() {
         });
         const playPauseBtn = overlay.querySelector('.play-pause-btn');
         const skipBtn = overlay.querySelector('.skip-btn');
-        const playPauseClick = e => {
+        const playPauseClick = async e => {
           e.stopPropagation();
-          toggleTimer();
+          await toggleTimer();
           updateUI();
         };
         playPauseBtn.addEventListener('click', playPauseClick);
         pipCleanups.push(() => {
           if (playPauseBtn) playPauseBtn.removeEventListener('click', playPauseClick);
         });
-        const skipClick = e => {
+        const skipClick = async e => {
           e.stopPropagation();
-          skipPhase();
+          await skipPhase();
+          updateUI();
         };
         skipBtn.addEventListener('click', skipClick);
         pipCleanups.push(() => {
@@ -1776,14 +1853,14 @@ async function togglePiP() {
             }, 600);
           });
         };
-        const keydownHandler = e => {
+        const keydownHandler = async e => {
           if (e.code === 'Space') {
             e.preventDefault();
-            toggleTimer();
+            await toggleTimer();
             updateUI();
             showActionFeedback(state.isRunning ? 'play' : 'pause');
           } else if (e.key.toLowerCase() === 's') {
-            skipPhase();
+            await skipPhase();
             updateUI();
             showActionFeedback('skip');
           } else if (e.key.toLowerCase() === 'p') {
@@ -1828,12 +1905,6 @@ function taskLabelInitialParent(el) {
 function copyStyles(targetWindow) {
   const targetDoc = targetWindow.document;
 
-  // Font Awesome
-  const faLink = targetDoc.createElement('link');
-  faLink.rel = 'stylesheet';
-  faLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-  targetDoc.head.appendChild(faLink);
-
   // Main Styles
   Array.from(document.styleSheets).forEach(styleSheet => {
     try {
@@ -1868,10 +1939,12 @@ function copyStyles(targetWindow) {
             width: 100vw !important;
             overflow: hidden !important;
             font-family: 'Inter', sans-serif !important;
-            color: white !important;
+            color: var(--clr-text) !important;
         }
         body.pip-body.mode-shortBreak { background-color: var(--clr-bg-short) !important; }
         body.pip-body.mode-longBreak { background-color: var(--clr-bg-long) !important; }
+        :root[data-theme="light"] .progress-ring__circle { stroke: #333 !important; }
+        :root[data-theme="light"] #current-task-display { color: #333 !important; background: rgba(0, 0, 0, 0.08) !important; }
         
         .timer-section {
             width: 100% !important; 
@@ -1971,6 +2044,7 @@ function copyStyles(targetWindow) {
             gap: min(3vmin, 8px) !important;
             cursor: pointer !important;
             pointer-events: auto !important;
+            color: white !important;
             transition: transform 0.2s ease !important;
         }
         .pip-control-icon:hover {
@@ -2068,6 +2142,603 @@ function updateActiveTaskDisplay() {
   }
 }
 
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const defaultAttributes = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  "stroke-width": 2,
+  "stroke-linecap": "round",
+  "stroke-linejoin": "round"
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+
+const createSVGElement = ([tag, attrs, children]) => {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.keys(attrs).forEach((name) => {
+    element.setAttribute(name, String(attrs[name]));
+  });
+  if (children?.length) {
+    children.forEach((child) => {
+      const childElement = createSVGElement(child);
+      element.appendChild(childElement);
+    });
+  }
+  return element;
+};
+const createElement = (iconNode, customAttrs = {}) => {
+  const tag = "svg";
+  const attrs = {
+    ...defaultAttributes,
+    ...customAttrs
+  };
+  return createSVGElement([tag, attrs, iconNode]);
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const mergeClasses = (...classes) => classes.filter((className, index, array) => {
+  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+}).join(" ").trim();
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const hasA11yProp = (props) => {
+  for (const prop in props) {
+    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const toCamelCase = (string) => {
+  let out = "";
+  let upperNext = false;
+  for (const ch of string) {
+    if (ch === "-" || ch === "_" || ch <= " ") {
+      upperNext = out.length > 0;
+      continue;
+    }
+    if (out.length === 0) {
+      out += ch.toLowerCase();
+    } else {
+      out += upperNext ? ch.toUpperCase() : ch;
+    }
+    upperNext = false;
+  }
+  return out;
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+
+const toPascalCase = (string) => {
+  const camelCase = toCamelCase(string);
+  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+
+const getAttrs = (element) => Array.from(element.attributes).reduce((attrs, attr) => {
+  attrs[attr.name] = attr.value;
+  return attrs;
+}, {});
+const getClassNames = (attrs) => {
+  if (typeof attrs === "string") return attrs;
+  if (!attrs || !attrs.class) return "";
+  if (attrs.class && typeof attrs.class === "string") {
+    return attrs.class.split(" ");
+  }
+  if (attrs.class && Array.isArray(attrs.class)) {
+    return attrs.class;
+  }
+  return "";
+};
+const replaceElement = (element, { nameAttr, icons, attrs }) => {
+  const iconName = element.getAttribute(nameAttr);
+  if (iconName == null) return;
+  const ComponentName = toPascalCase(iconName);
+  const iconNode = icons[ComponentName];
+  if (!iconNode) {
+    return console.warn(
+      `${element.outerHTML} icon name was not found in the provided icons object.`
+    );
+  }
+  const elementAttrs = getAttrs(element);
+  const ariaProps = hasA11yProp(elementAttrs) ? {} : { "aria-hidden": "true" };
+  const iconAttrs = {
+    ...defaultAttributes,
+    "data-lucide": iconName,
+    ...ariaProps,
+    ...attrs,
+    ...elementAttrs
+  };
+  const elementClassNames = getClassNames(elementAttrs);
+  const className = getClassNames(attrs);
+  const classNames = mergeClasses(
+    "lucide",
+    `lucide-${iconName}`,
+    ...elementClassNames,
+    ...className
+  );
+  if (classNames) {
+    Object.assign(iconAttrs, {
+      class: classNames
+    });
+  }
+  const svgElement = createElement(iconNode, iconAttrs);
+  return element.parentNode?.replaceChild(svgElement, element);
+};
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Bot = [
+  ["path", { d: "M12 8V4H8" }],
+  ["rect", { width: "16", height: "12", x: "4", y: "8", rx: "2" }],
+  ["path", { d: "M2 14h2" }],
+  ["path", { d: "M20 14h2" }],
+  ["path", { d: "M15 13v2" }],
+  ["path", { d: "M9 13v2" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Clock = [
+  ["circle", { cx: "12", cy: "12", r: "10" }],
+  ["path", { d: "M12 6v6l4 2" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const CloudUpload = [
+  ["path", { d: "M12 13v8" }],
+  ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
+  ["path", { d: "m8 17 4-4 4 4" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Hourglass = [
+  ["path", { d: "M5 22h14" }],
+  ["path", { d: "M5 2h14" }],
+  ["path", { d: "M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" }],
+  ["path", { d: "M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Palette = [
+  [
+    "path",
+    {
+      d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+    }
+  ],
+  ["circle", { cx: "13.5", cy: "6.5", r: ".5", fill: "currentColor" }],
+  ["circle", { cx: "17.5", cy: "10.5", r: ".5", fill: "currentColor" }],
+  ["circle", { cx: "6.5", cy: "12.5", r: ".5", fill: "currentColor" }],
+  ["circle", { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const PictureInPicture = [
+  ["path", { d: "M2 10h6V4" }],
+  ["path", { d: "m2 4 6 6" }],
+  ["path", { d: "M21 10V7a2 2 0 0 0-2-2h-7" }],
+  ["path", { d: "M3 14v2a2 2 0 0 0 2 2h3" }],
+  ["rect", { x: "12", y: "14", width: "10", height: "7", rx: "1" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Plus = [
+  ["path", { d: "M5 12h14" }],
+  ["path", { d: "M12 5v14" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Settings = [
+  [
+    "path",
+    {
+      d: "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+    }
+  ],
+  ["circle", { cx: "12", cy: "12", r: "3" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const SkipForward = [
+  ["path", { d: "M21 4v16" }],
+  [
+    "path",
+    { d: "M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z" }
+  ]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const User = [
+  ["path", { d: "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" }],
+  ["circle", { cx: "12", cy: "7", r: "4" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const Volume2 = [
+  [
+    "path",
+    {
+      d: "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"
+    }
+  ],
+  ["path", { d: "M16 9a5 5 0 0 1 0 6" }],
+  ["path", { d: "M19.364 18.364a9 9 0 0 0 0-12.728" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+const X = [
+  ["path", { d: "M18 6 6 18" }],
+  ["path", { d: "m6 6 12 12" }]
+];
+
+/**
+ * @license lucide v1.74.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+
+const createIcons = ({
+  icons = {},
+  nameAttr = "data-lucide",
+  attrs = {},
+  root = document,
+  inTemplates
+} = {}) => {
+  if (!Object.values(icons).length) {
+    throw new Error(
+      "Please provide an icons object.\nIf you want to use all the icons you can import it like:\n `import { createIcons, icons } from 'lucide';\nlucide.createIcons({icons});`"
+    );
+  }
+  if (typeof root === "undefined") {
+    throw new Error("`createIcons()` only works in a browser environment.");
+  }
+  const elementsToReplace = Array.from(root.querySelectorAll(`[${nameAttr}]`));
+  elementsToReplace.forEach((element) => replaceElement(element, { nameAttr, icons, attrs }));
+  if (inTemplates) {
+    const templates = Array.from(root.querySelectorAll("template"));
+    templates.forEach(
+      (template) => createIcons({
+        icons,
+        nameAttr,
+        attrs,
+        root: template.content,
+        inTemplates
+      })
+    );
+  }
+  if (nameAttr === "data-lucide") {
+    const deprecatedElements = root.querySelectorAll("[icon-name]");
+    if (deprecatedElements.length > 0) {
+      console.warn(
+        "[Lucide] Some icons were found with the now deprecated icon-name attribute. These will still be replaced for backwards compatibility, but will no longer be supported in v1.0 and you should switch to data-lucide"
+      );
+      Array.from(deprecatedElements).forEach(
+        (element) => replaceElement(element, { nameAttr: "icon-name", icons, attrs })
+      );
+    }
+  }
+};
+
+function refreshIcons() {
+  createIcons({
+    icons: {
+      Clock,
+      PictureInPicture,
+      User,
+      Settings,
+      SkipForward,
+      Hourglass,
+      Plus,
+      X,
+      Bot,
+      Volume2,
+      Palette,
+      CloudUpload
+    }
+  });
+}
+
+let currentUser = null;
+async function initAuth() {
+  await initFirebaseAuth();
+  const auth = getAuthRef();
+  if (!auth) return;
+  const {
+    onAuthStateChanged
+  } = await __vitePreload(async () => { const {
+    onAuthStateChanged
+  } = await import('./index.esm-q9MtbEAm.js');return {
+    onAuthStateChanged
+  }},true              ?__vite__mapDeps([2,1]):void 0);
+
+  // Listen for auth state changes
+  onAuthStateChanged(auth, async user => {
+    const wasLoggedIn = !!currentUser;
+    currentUser = user;
+    if (user) {
+      showLoggedInView(user);
+      refreshIcons();
+      await setupRealtimeSync(user);
+    } else {
+      unsubscribeRealtimeSync();
+      showLoggedOutView(wasLoggedIn);
+      refreshIcons();
+    }
+  });
+
+  // Event Listeners
+  elements.authBtn.addEventListener('click', () => toggleAuthModal(true));
+  elements.closeAuthBtn.addEventListener('click', () => toggleAuthModal(false));
+  elements.googleLoginBtn.addEventListener('click', signInWithGoogle);
+  elements.emailLoginBtn.addEventListener('click', e => handleEmailAuth(e, 'login'));
+  elements.emailRegisterBtn.addEventListener('click', e => handleEmailAuth(e, 'register'));
+  syncEvents.onSyncStatusChange = status => {
+    updateSyncUI(status);
+  };
+  elements.logoutBtn.addEventListener('click', signOut);
+}
+function getCurrentUser() {
+  return currentUser;
+}
+function toggleAuthModal(show) {
+  if (show) {
+    elements.authErrorMsg.style.display = 'none';
+    elements.authModal.classList.remove('hidden');
+  } else {
+    elements.authModal.classList.add('hidden');
+  }
+}
+function showLoggedInView(user) {
+  elements.authLoggedOutView.style.display = 'none';
+  elements.authLoggedInView.style.display = 'block';
+  const displayName = user.displayName || 'Focus Timer User';
+  elements.userDisplayName.textContent = displayName;
+  elements.userEmail.textContent = user.email || '';
+  elements.authUsername.textContent = displayName.split(' ')[0];
+  elements.authUsername.style.display = 'inline';
+}
+function showLoggedOutView(shouldResetState = false) {
+  elements.authLoggedInView.style.display = 'none';
+  elements.authLoggedOutView.style.display = 'block';
+  elements.authEmail.value = '';
+  elements.authPassword.value = '';
+  elements.authUsername.style.display = 'none';
+  updateSyncUI('none');
+  if (shouldResetState) {
+    stopTimer(false);
+    resetLocalState();
+    loadCategories();
+    renderTasks();
+    updateStatsUI();
+    applySettingsToUI();
+    applyTheme();
+    updateVolume();
+    updateDisplay();
+    updateActiveTaskDisplay();
+  }
+}
+function updateSyncUI(status) {
+  const indicator = elements.syncIndicator;
+  if (!indicator) return;
+  indicator.classList.remove('syncing', 'synced', 'error');
+  if (status === 'syncing') {
+    indicator.textContent = 'Syncing...';
+    indicator.classList.add('syncing');
+  } else if (status === 'synced') {
+    indicator.textContent = 'Synced';
+    indicator.classList.add('synced');
+  } else if (status === 'error') {
+    indicator.textContent = 'Sync Error';
+    indicator.classList.add('error');
+  } else if (status === 'none') {
+    indicator.textContent = 'Not Logged In';
+  }
+}
+function showError(msg) {
+  elements.authErrorMsg.textContent = msg;
+  elements.authErrorMsg.style.display = 'block';
+}
+async function signInWithGoogle() {
+  await initFirebaseAuth();
+  const auth = getAuthRef();
+  const provider = getGoogleProviderRef();
+  if (!auth || !provider) return showError("Firebase credentials not configured.");
+  const {
+    signInWithPopup
+  } = await __vitePreload(async () => { const {
+    signInWithPopup
+  } = await import('./index.esm-q9MtbEAm.js');return {
+    signInWithPopup
+  }},true              ?__vite__mapDeps([2,1]):void 0);
+  try {
+    await signInWithPopup(auth, provider);
+    toggleAuthModal(false);
+  } catch (error) {
+    if (error.code === 'auth/popup-closed-by-user') {
+      // Silently ignore user closing popup
+      return;
+    } else if (error.code === 'auth/popup-blocked') {
+      showError("Popup blocked by browser. Please allow popups for this site.");
+    } else {
+      showError(error.message || "Failed to sign in with Google.");
+    }
+  }
+}
+async function handleEmailAuth(e, action) {
+  e.preventDefault();
+  if (!elements.emailAuthForm.checkValidity()) {
+    elements.emailAuthForm.reportValidity();
+    return;
+  }
+  await initFirebaseAuth();
+  const auth = getAuthRef();
+  if (!auth) return showError("Firebase not configured");
+  const email = elements.authEmail.value;
+  const password = elements.authPassword.value;
+  const {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
+  } = await __vitePreload(async () => { const {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
+  } = await import('./index.esm-q9MtbEAm.js');return {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
+  }},true              ?__vite__mapDeps([2,1]):void 0);
+  try {
+    if (action === 'login') {
+      await signInWithEmailAndPassword(auth, email, password);
+    } else {
+      await createUserWithEmailAndPassword(auth, email, password);
+    }
+    toggleAuthModal(false);
+  } catch (error) {
+    let cleanMsg = "An error occurred. Please try again.";
+    if (error.code === 'auth/email-already-in-use') cleanMsg = "Email already in use.";else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') cleanMsg = "Invalid email or password.";else if (error.code === 'auth/too-many-requests') cleanMsg = "Too many attempts. Please try again later.";else if (error.code === 'auth/weak-password') cleanMsg = "Password is too weak. Must be at least 6 characters.";else if (error.code === 'auth/invalid-email') cleanMsg = "Invalid email format.";
+    showError(cleanMsg);
+  }
+}
+async function signOut() {
+  const auth = getAuthRef();
+  if (!auth) return;
+  const {
+    signOut: firebaseSignOut
+  } = await __vitePreload(async () => { const {
+    signOut: firebaseSignOut
+  } = await import('./index.esm-q9MtbEAm.js');return {
+    signOut: firebaseSignOut
+  }},true              ?__vite__mapDeps([2,1]):void 0);
+  try {
+    unsubscribeRealtimeSync();
+    await firebaseSignOut(auth);
+    toggleAuthModal(false);
+  } catch (error) {
+    console.error("Sign out error", error);
+  }
+}
+
 // Setup Event Bridges
 timerEvents.onPomodoroComplete = () => {
   updateTaskPomodoros();
@@ -2076,7 +2747,7 @@ timerEvents.onPomodoroComplete = () => {
 timerEvents.onPomodoroStart = async () => {
   const task = getFirstIncompleteTask();
   if (task) {
-    const wantsToSelect = await customConfirm(`Bạn chưa chọn công việc nào. Bạn có muốn bắt đầu làm "${task.title}" không?`);
+    const wantsToSelect = await customConfirm(`No task selected. Start working on "${task.title}"?`);
     if (wantsToSelect) {
       setActiveTask(task.id);
     }
@@ -2146,32 +2817,18 @@ elements.taskList.addEventListener('click', async e => {
     updateActiveTaskDisplay();
     return;
   }
-  const restoreBtn = target.closest('[data-action="restore"]');
-  if (restoreBtn && restoreBtn.dataset.id) {
-    restoreTask(restoreBtn.dataset.id);
-    updateActiveTaskDisplay();
-    return;
-  }
-  const deletePermBtn = target.closest('[data-action="delete-permanent"]');
-  if (deletePermBtn && deletePermBtn.dataset.id) {
-    const confirmed = await customConfirm('Bạn có chắc muốn xóa vĩnh viễn task này không? Thao tác này không thể hoàn tác.');
-    if (confirmed) {
-      deletePermanently(deletePermBtn.dataset.id);
-      updateActiveTaskDisplay();
-    }
-    return;
-  }
-  const deleteBtn = target.closest('[data-action="delete"]');
-  if (deleteBtn && deleteBtn.dataset.id) {
-    deleteTask(deleteBtn.dataset.id);
-    updateActiveTaskDisplay();
-    return;
-  }
 });
 
 // ... Settings Event Listeners ...
 elements.settingsBtn.addEventListener('click', () => toggleSettingsModal(true));
 elements.closeSettingsBtn.addEventListener('click', () => toggleSettingsModal(false));
+document.getElementById('cancel-settings-btn')?.addEventListener('click', () => toggleSettingsModal(false));
+document.getElementById('test-alarm-btn')?.addEventListener('click', () => {
+  const sound = elements.inputs.alarmSound.value;
+  const parsedVol = parseInt(elements.inputs.volume.value, 10);
+  const volume = Number.isNaN(parsedVol) ? 50 : parsedVol;
+  previewAlarm(sound, volume);
+});
 elements.saveSettingsBtn.addEventListener('click', () => {
   saveSettings();
   toggleSettingsModal(false);
@@ -2179,6 +2836,10 @@ elements.saveSettingsBtn.addEventListener('click', () => {
 elements.inputs.volume.addEventListener('input', e => {
   const target = e.target;
   elements.volumeDisplay.textContent = target.value;
+  target.style.setProperty('--volume-pct', `${target.value}%`);
+});
+elements.inputs.darkMode.addEventListener('change', () => {
+  applyTheme(elements.inputs.darkMode.checked);
 });
 
 // ... PiP Listener ...
@@ -2201,12 +2862,13 @@ function showCategoryPicker(anchorEl, taskId) {
   closeCategoryPicker();
   const picker = document.createElement('div');
   picker.className = 'category-picker-popover';
-  state.categories.forEach(cat => {
+  state.categories.filter(c => !c.deletedAt).forEach(cat => {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'category-picker-item';
     const safeName = escapeHtml(cat.name);
-    item.innerHTML = `<span class="category-dot" style="background-color: ${cat.color}"></span><span>${safeName}</span>`;
+    const safeColor = sanitizeHexColor(cat.color);
+    item.innerHTML = `<span class="category-dot" style="background-color: ${safeColor}"></span><span>${safeName}</span>`;
     item.onclick = e => {
       e.stopPropagation();
       updateTaskCategory(taskId, cat.id);
@@ -2252,6 +2914,11 @@ document.addEventListener('click', e => {
 
 // Category Modal setup
 let selectedCategoryColor = CATEGORY_COLORS[0];
+function closeCategoryModal() {
+  if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
+  const errEl = document.getElementById('category-error-msg');
+  if (errEl) errEl.style.display = 'none';
+}
 function initCategoryModal() {
   if (!elements.categoryColorOptions) return;
   elements.categoryColorOptions.innerHTML = '';
@@ -2270,35 +2937,42 @@ function initCategoryModal() {
     elements.categoryColorOptions.appendChild(swatch);
   });
   if (elements.categoryCloseBtn) {
-    elements.categoryCloseBtn.onclick = () => {
-      if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-    };
+    elements.categoryCloseBtn.onclick = closeCategoryModal;
   }
   if (elements.categoryCancelBtn) {
-    elements.categoryCancelBtn.onclick = () => {
-      if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-    };
+    elements.categoryCancelBtn.onclick = closeCategoryModal;
   }
   if (elements.categoryModal) {
     elements.categoryModal.addEventListener('click', e => {
-      if (e.target === elements.categoryModal) elements.categoryModal.classList.add('hidden');
+      if (e.target === elements.categoryModal) closeCategoryModal();
     });
   }
   if (elements.categoryNameInput) {
-    elements.categoryNameInput.addEventListener('input', updateCategoryModalPreview);
+    elements.categoryNameInput.addEventListener('input', () => {
+      updateCategoryModalPreview();
+      const errEl = document.getElementById('category-error-msg');
+      if (errEl) errEl.style.display = 'none';
+    });
   }
   if (elements.categorySaveBtn) {
     elements.categorySaveBtn.onclick = () => {
       const name = elements.categoryNameInput ? elements.categoryNameInput.value.trim() : '';
-      if (name) {
-        const newCat = addCategory(name, selectedCategoryColor);
-        if (newCat) {
-          if (elements.categoryModal) elements.categoryModal.classList.add('hidden');
-          if (elements.categoryNameInput) elements.categoryNameInput.value = '';
-          updateCategoryModalPreview();
-        } else {
-          alert('Category name already exists or is invalid.');
+      const errEl = document.getElementById('category-error-msg');
+      if (!name) {
+        if (errEl) {
+          errEl.textContent = 'Please enter a category name.';
+          errEl.style.display = 'block';
         }
+        return;
+      }
+      const newCat = addCategory(name, selectedCategoryColor);
+      if (newCat) {
+        closeCategoryModal();
+        if (elements.categoryNameInput) elements.categoryNameInput.value = '';
+        updateCategoryModalPreview();
+      } else if (errEl) {
+        errEl.textContent = 'Category name already exists or is invalid.';
+        errEl.style.display = 'block';
       }
     };
   }
@@ -2338,12 +3012,12 @@ function initArchiveModal() {
   }
   if (elements.archiveEmptyBtn) {
     elements.archiveEmptyBtn.addEventListener('click', async () => {
-      const count = state.tasks ? state.tasks.filter(t => t.isArchived).length : 0;
+      const count = state.tasks ? state.tasks.filter(t => t.isArchived && !t.deletedAt).length : 0;
       if (count === 0) return;
-      const confirmed = await customConfirm(`Toàn bộ ${count} công việc đã lưu trữ sẽ bị xóa vĩnh viễn khỏi thiết bị và không thể khôi phục lại.`, {
-        title: `Dọn sạch ${count} công việc?`,
-        confirmText: 'Xóa tất cả',
-        cancelText: 'Hủy bỏ',
+      const confirmed = await customConfirm(`All ${count} archived ${count === 1 ? 'task' : 'tasks'} will be permanently deleted and cannot be recovered.`, {
+        title: `Clear ${count} archived ${count === 1 ? 'task' : 'tasks'}?`,
+        confirmText: 'Delete All',
+        cancelText: 'Cancel',
         isDanger: true
       });
       if (confirmed) {
@@ -2368,10 +3042,10 @@ function initArchiveModal() {
       }
       const deletePermBtn = target.closest('[data-action="delete-permanent"]');
       if (deletePermBtn && deletePermBtn.dataset.id) {
-        const confirmed = await customConfirm('Công việc này sẽ bị xóa hoàn toàn khỏi kho lưu trữ và không thể khôi phục lại.', {
-          title: 'Xóa vĩnh viễn công việc?',
-          confirmText: 'Xóa ngay',
-          cancelText: 'Hủy bỏ',
+        const confirmed = await customConfirm('This task will be permanently deleted from the archive and cannot be recovered.', {
+          title: 'Delete task permanently?',
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
           isDanger: true
         });
         if (confirmed) {
@@ -2407,7 +3081,7 @@ document.addEventListener('keydown', e => {
     if (isConfirmOpen) return;
     if (isSettingsOpen) toggleSettingsModal(false);
     if (isAuthOpen) toggleAuthModal(false);
-    if (isCategoryOpen) elements.categoryModal.classList.add('hidden');
+    if (isCategoryOpen) closeCategoryModal();
     if (isArchiveOpen) elements.archiveModal.classList.add('hidden');
   }
 
@@ -2453,14 +3127,17 @@ function init() {
   updateStatsUI();
   setMode('pomodoro');
   initPiP();
-  if (window.lucide) window.lucide.createIcons();
+  refreshIcons();
 
   // Centralized Syncing
   const debouncedSync = debounce(() => {
     const user = getCurrentUser();
     if (user) syncDataToCloud(user);
   }, 2000);
-  stateEvents.onStateChange = debouncedSync;
+  stateEvents.onStateChange = () => {
+    markLocalChangesPending();
+    debouncedSync();
+  };
 
   // Initialize Firebase Auth
   initAuth();

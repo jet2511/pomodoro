@@ -1,5 +1,5 @@
-import { w as registerVersion } from './index.esm-CAx1feN0.js';
-export { F as FirebaseError, S as SDK_VERSION, I as _DEFAULT_ENTRY_NAME, J as _addComponent, K as _addOrOverwriteComponent, M as _apps, N as _clearComponents, O as _components, b as _getProvider, P as _isFirebaseApp, _ as _isFirebaseServerApp, Q as _isFirebaseServerAppSettings, v as _registerComponent, A as _removeServiceInstance, R as _serverApps, T as deleteApp, h as getApp, U as getApps, V as initializeApp, W as initializeServerApp, X as onLog, Y as setLogLevel } from './index.esm-CAx1feN0.js';
+import { w as registerVersion } from './index.esm-rsfy7El_.js';
+export { F as FirebaseError, S as SDK_VERSION, I as _DEFAULT_ENTRY_NAME, J as _addComponent, K as _addOrOverwriteComponent, M as _apps, N as _clearComponents, O as _components, b as _getProvider, P as _isFirebaseApp, _ as _isFirebaseServerApp, Q as _isFirebaseServerAppSettings, v as _registerComponent, A as _removeServiceInstance, R as _serverApps, T as deleteApp, h as getApp, U as getApps, V as initializeApp, W as initializeServerApp, X as onLog, Y as setLogLevel } from './index.esm-rsfy7El_.js';
 
 var name = "firebase";
 var version = "12.10.0";
